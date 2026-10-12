@@ -71,7 +71,7 @@ const MainLayout: React.FC = () => {
               <span>{locationError}</span>
             </div>
             <button
-              onClick={() => requestUserLocation()}
+              onClick={() => requestUserLocation(true)}
               className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg transition"
             >
               إعادة المحاولة

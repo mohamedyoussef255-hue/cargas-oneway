@@ -61,7 +61,12 @@ export const FilterBar: React.FC = () => {
     }
 
     if (!isSpeechRecognitionSupported()) {
-      alert('التعرف الصوتي غير مدعوم في متصفحك حالياً.');
+      setVoiceTranscript('التعرف الصوتي غير مدعوم في هذا المتصفح');
+      setIsListening(true);
+      setTimeout(() => {
+        setIsListening(false);
+        setVoiceTranscript('');
+      }, 3000);
       return;
     }
 
@@ -231,7 +236,7 @@ export const FilterBar: React.FC = () => {
       {isListening && (
         <div className="flex items-center justify-between p-2.5 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-xl text-xs text-rose-700 dark:text-rose-300">
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-ping"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-pulse"></span>
             <span>{voiceTranscript || 'تحدث الآن، مثال: "أقرب محطة غاز" أو "زيوت BP"...'}</span>
           </div>
           <button

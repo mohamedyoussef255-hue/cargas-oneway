@@ -149,7 +149,7 @@ export const MoeenAssistant: React.FC = () => {
             <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-black text-sm">
               🤖
             </div>
-            <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-emerald-700 animate-ping"></span>
+            <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-emerald-700 animate-pulse"></span>
           </div>
           <div className="text-right">
             <span className="text-xs font-black block leading-none">مُعيـن الذكي</span>
@@ -223,7 +223,7 @@ export const MoeenAssistant: React.FC = () => {
                 {message}
                 {isSpeaking && (
                   <div className="flex items-center gap-1 mt-2 text-[10px] text-emerald-600 font-bold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-ping"></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
                     <span>بيتكلم دلوقتي...</span>
                   </div>
                 )}

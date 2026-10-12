@@ -26,6 +26,7 @@ export const StationMap: React.FC<StationMapProps> = ({ onStationSelect, classNa
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const userMarkerRef = useRef<L.Marker | null>(null);
+  const userAccuracyCircleRef = useRef<L.Circle | null>(null);
 
   const {
     filteredStations,
@@ -121,7 +122,7 @@ export const StationMap: React.FC<StationMapProps> = ({ onStationSelect, classNa
     };
   }, [isPickingLocation, setUserLocationManual]);
 
-  // تحديث علامة موقع المستخدم
+  // تحديث علامة ودائرة دقة موقع المستخدم (GPS Accuracy Radius)
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -143,19 +144,52 @@ export const StationMap: React.FC<StationMapProps> = ({ onStationSelect, classNa
         iconAnchor: [16, 16],
       });
 
+      const popupContent = `
+        <div class="p-2 font-bold text-center text-slate-800 text-xs">
+          <div>موقعك الحالي 📍</div>
+          ${userLocation.accuracy ? `<div class="text-[10px] text-blue-600 font-normal mt-0.5">دقة الإشارة: ±${Math.round(userLocation.accuracy)} متر</div>` : ''}
+        </div>
+      `;
+
       if (userMarkerRef.current) {
         userMarkerRef.current.setLatLng([userLocation.lat, userLocation.lng]);
+        userMarkerRef.current.setPopupContent(popupContent);
       } else {
         const marker = L.marker([userLocation.lat, userLocation.lng], {
           icon: userIcon,
           zIndexOffset: 1000,
         }).addTo(map);
-        marker.bindPopup('<div class="p-2 font-bold text-center text-slate-800">موقعك الحالي 📍</div>');
+        marker.bindPopup(popupContent);
         userMarkerRef.current = marker;
       }
-    } else if (userMarkerRef.current) {
-      userMarkerRef.current.remove();
-      userMarkerRef.current = null;
+
+      // رسم دائرة دقة الـ GPS
+      if (userLocation.accuracy && userLocation.accuracy < 10000) {
+        if (userAccuracyCircleRef.current) {
+          userAccuracyCircleRef.current.setLatLng([userLocation.lat, userLocation.lng]);
+          userAccuracyCircleRef.current.setRadius(userLocation.accuracy);
+        } else {
+          userAccuracyCircleRef.current = L.circle([userLocation.lat, userLocation.lng], {
+            radius: userLocation.accuracy,
+            color: '#3b82f6',
+            fillColor: '#60a5fa',
+            fillOpacity: 0.12,
+            weight: 1,
+          }).addTo(map);
+        }
+      } else if (userAccuracyCircleRef.current) {
+        userAccuracyCircleRef.current.remove();
+        userAccuracyCircleRef.current = null;
+      }
+    } else {
+      if (userMarkerRef.current) {
+        userMarkerRef.current.remove();
+        userMarkerRef.current = null;
+      }
+      if (userAccuracyCircleRef.current) {
+        userAccuracyCircleRef.current.remove();
+        userAccuracyCircleRef.current = null;
+      }
     }
   }, [userLocation]);
 
@@ -318,7 +352,7 @@ export const StationMap: React.FC<StationMapProps> = ({ onStationSelect, classNa
       mapInstanceRef.current.flyTo([userLocation.lat, userLocation.lng], 14, { duration: 0.8 });
     }
 
-    const loc = await requestUserLocation();
+    const loc = await requestUserLocation(true);
     if (loc && mapInstanceRef.current) {
       mapInstanceRef.current.flyTo([loc.lat, loc.lng], 14, { duration: 0.8 });
     }

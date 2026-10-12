@@ -8,10 +8,10 @@ interface AppContextType {
   filteredStations: (Station & { distance?: number })[];
   settings: AppSettings;
   updateSettings: (newSettings: Partial<AppSettings>) => void;
-  userLocation: { lat: number; lng: number } | null;
+  userLocation: { lat: number; lng: number; accuracy?: number } | null;
   isLocating: boolean;
   locationError: string | null;
-  requestUserLocation: () => Promise<{ lat: number; lng: number } | null>;
+  requestUserLocation: (force?: boolean) => Promise<{ lat: number; lng: number; accuracy?: number } | null>;
   setUserLocationManual: (lat: number, lng: number, label?: string) => void;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
@@ -194,7 +194,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSettings((prev) => ({ ...prev, ...newSettings }));
   };
 
-  const userLocationRef = useRef<{ lat: number; lng: number } | null>(userLocation);
+  const userLocationRef = useRef<{ lat: number; lng: number; accuracy?: number } | null>(userLocation);
   const isLocatingRef = useRef(false);
 
   useEffect(() => {
@@ -203,24 +203,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // تعيين الموقع الجغرافي يدوياً (للتغلب على مشاكل حجب إذن المتصفح في الـ iframe)
   const setUserLocationManual = (lat: number, lng: number, _label?: string) => {
-    const loc = { lat, lng };
+    const loc = { lat, lng, accuracy: 15 };
     setUserLocation(loc);
     setLocationError(null);
   };
 
-  // طلب وتحديد موقع المستخدم الحالي تلقائياً وفورياً مع معالجة ذكية للأذونات والـ fallback
-  const requestUserLocation = useCallback(async (): Promise<{ lat: number; lng: number } | null> => {
-    // منع الاستدعاءات المتزامنة أو التكرارية التي تسبب وميض الشاشة
-    if (isLocatingRef.current) {
+  // طلب وتحديد موقع المستخدم الحالي بالـ GPS الحقيقي مع تعدد مسارات الإنقاذ والـ Fallback
+  const requestUserLocation = useCallback(async (force = false): Promise<{ lat: number; lng: number; accuracy?: number } | null> => {
+    if (isLocatingRef.current && !force) {
       return userLocationRef.current;
     }
     isLocatingRef.current = true;
     setIsLocating(true);
     setLocationError(null);
 
-    const finishSuccess = (loc: { lat: number; lng: number }) => {
+    const finishSuccess = (loc: { lat: number; lng: number; accuracy?: number }) => {
       const current = userLocationRef.current;
-      // تجنب التحديث إذا كان الموقع متطابقاً لمنع إعادة تصيير الخريطة والمكونات بدون داع
       if (!current || Math.abs(current.lat - loc.lat) > 0.0001 || Math.abs(current.lng - loc.lng) > 0.0001) {
         setUserLocation(loc);
       }
@@ -230,43 +228,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return loc;
     };
 
-    // دالة الجلب الفوري التلقائي عبر عنوان الشبكة (IP Geolocation) عند حجب أذونات المتصفح أو الـ iframe
+    // جلب احتياطي سريع متعدد المصادر عبر عناوين الشبكة IP بالتوازي
     const tryIpFallback = async () => {
-      // 1. تجربة ipwho.is (سريع ومجاني ويدعم HTTPS و CORS)
       try {
-        const res = await fetch('https://ipwho.is/');
-        if (res.ok) {
+        const fetchIpwhois = async () => {
+          const res = await fetch('https://ipwho.is/');
+          if (!res.ok) throw new Error();
           const data = await res.json();
-          if (data && data.success && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
-            return finishSuccess({ lat: data.latitude, lng: data.longitude });
-          }
+          if (!data || !data.success || typeof data.latitude !== 'number') throw new Error();
+          return { lat: data.latitude, lng: data.longitude, accuracy: 2500 };
+        };
+
+        const fetchBigData = async () => {
+          const res = await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client');
+          if (!res.ok) throw new Error();
+          const data = await res.json();
+          if (!data || typeof data.latitude !== 'number') throw new Error();
+          return { lat: data.latitude, lng: data.longitude, accuracy: 3000 };
+        };
+
+        const fetchFreeIp = async () => {
+          const res = await fetch('https://freeipapi.com/api/json');
+          if (!res.ok) throw new Error();
+          const data = await res.json();
+          if (!data || typeof data.latitude !== 'number') throw new Error();
+          return { lat: data.latitude, lng: data.longitude, accuracy: 3000 };
+        };
+
+        const ipLoc = await Promise.any([fetchIpwhois(), fetchBigData(), fetchFreeIp()]);
+        if (ipLoc) {
+          return finishSuccess(ipLoc);
         }
       } catch {}
 
-      // 2. تجربة ipapi.co
-      try {
-        const res2 = await fetch('https://ipapi.co/json/');
-        if (res2.ok) {
-          const data2 = await res2.json();
-          if (data2 && typeof data2.latitude === 'number' && typeof data2.longitude === 'number') {
-            return finishSuccess({ lat: data2.latitude, lng: data2.longitude });
-          }
-        }
-      } catch {}
-
-      // 3. تجربة freeipapi.com
-      try {
-        const res3 = await fetch('https://freeipapi.com/api/json');
-        if (res3.ok) {
-          const data3 = await res3.json();
-          if (data3 && typeof data3.latitude === 'number' && typeof data3.longitude === 'number') {
-            return finishSuccess({ lat: data3.latitude, lng: data3.longitude });
-          }
-        }
-      } catch {}
-
-      // موقع افتراضي لوسط القاهرة عند تعذر كل الطرق
-      const defaultLoc = userLocationRef.current || { lat: 30.0444, lng: 31.2357 };
+      // موقع افتراضي لوسط القاهرة عند تعذر كافة الوسائل
+      const defaultLoc = userLocationRef.current || { lat: 30.0444, lng: 31.2357, accuracy: 5000 };
       return finishSuccess(defaultLoc);
     };
 
@@ -276,40 +272,86 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return new Promise((resolve) => {
       let resolved = false;
-      const timeoutTimer = setTimeout(async () => {
-        if (!resolved) {
-          resolved = true;
-          const fallbackLoc = await tryIpFallback();
-          resolve(fallbackLoc);
-        }
-      }, 3000);
 
+      // مؤقت مرن: بعد 3.5 ثانية إذا تأخر الرد من الـ GPS، نقوم بجلب موقع تقريبي احتياطياً بدون إلغاء الـ GPS
+      const softTimer = setTimeout(async () => {
+        if (!resolved) {
+          const interim = await tryIpFallback();
+          resolve(interim);
+        }
+      }, 3500);
+
+      const onGpsSuccess = (pos: GeolocationPosition) => {
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(softTimer);
+        const loc = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+        };
+        resolve(finishSuccess(loc));
+      };
+
+      // 1. تجربة GPS عالي الدقة أولاً (للهواتف والأجهزة الداعمة)
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          if (resolved) return;
-          resolved = true;
-          clearTimeout(timeoutTimer);
-          const loc = {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-          };
-          resolve(finishSuccess(loc));
+        onGpsSuccess,
+        () => {
+          // 2. إذا فشل الـ High Accuracy (مثلاً كمبيوتر بدون شريحة GPS أو تعذر)، نجرب الدقة القياسية عبر الواي فاي
+          navigator.geolocation.getCurrentPosition(
+            onGpsSuccess,
+            async () => {
+              if (resolved) return;
+              resolved = true;
+              clearTimeout(softTimer);
+              const fallback = await tryIpFallback();
+              resolve(fallback);
+            },
+            { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }
+          );
         },
-        async () => {
-          if (resolved) return;
-          resolved = true;
-          clearTimeout(timeoutTimer);
-          const ipLoc = await tryIpFallback();
-          resolve(ipLoc);
-        },
-        { enableHighAccuracy: true, timeout: 2500, maximumAge: 60000 }
+        { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
       );
     });
   }, []);
 
-  // تشغيل فتح وتحديد الموقع تلقائياً فور تشغيل التطبيق لمرة واحدة فقط
+  // تشغيل تحديد الموقع التلقائي ومراقبة تحسن إشارة الـ GPS في الخلفية
   useEffect(() => {
     requestUserLocation();
+
+    // تشغيل مراقب GPS مستمر لتحديث الموقع فور التقاط الأقمار الصناعية بدقة
+    let watchId: number | null = null;
+    if ('geolocation' in navigator) {
+      try {
+        watchId = navigator.geolocation.watchPosition(
+          (pos) => {
+            const loc = {
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              accuracy: pos.coords.accuracy,
+            };
+            const current = userLocationRef.current;
+            if (!current) {
+              setUserLocation(loc);
+            } else {
+              const dist = calculateHaversineDistance(current.lat, current.lng, loc.lat, loc.lng);
+              // تحديث فوري إذا تحرك أكثر من 30 متراً أو زادت الدقة
+              if (dist > 0.03 || (loc.accuracy && current.accuracy && loc.accuracy < current.accuracy / 2)) {
+                setUserLocation(loc);
+              }
+            }
+          },
+          () => {},
+          { enableHighAccuracy: true, maximumAge: 10000 }
+        );
+      } catch {}
+    }
+
+    return () => {
+      if (watchId !== null && 'geolocation' in navigator) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
