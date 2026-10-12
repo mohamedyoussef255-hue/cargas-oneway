@@ -33,6 +33,7 @@ export const StationMap: React.FC<StationMapProps> = ({ onStationSelect, classNa
     activeMapStation,
     setActiveMapStation,
     userLocation,
+    userLocateTrigger,
     isLocating,
     requestUserLocation,
     setUserLocationManual,
@@ -343,6 +344,16 @@ export const StationMap: React.FC<StationMapProps> = ({ onStationSelect, classNa
     });
   }, [activeMapStation]);
 
+  // التوجه والتركيز على موقع المستخدم فور طلبه من أي مكان بالتطبيق (الهيدر أو الخريطة)
+  useEffect(() => {
+    if (userLocateTrigger && userLocation && mapInstanceRef.current) {
+      mapInstanceRef.current.flyTo([userLocation.lat, userLocation.lng], 15, {
+        duration: 1.2,
+        easeLinearity: 0.25,
+      });
+    }
+  }, [userLocateTrigger]);
+
   // التوجه لموقع المستخدم بسلاسة وبدون أي وميض
   const handleLocateUser = async () => {
     if (isLocating) return;
@@ -399,96 +410,108 @@ export const StationMap: React.FC<StationMapProps> = ({ onStationSelect, classNa
       {/* شريط الإجراءات السريعة العائم فوق الخريطة */}
       <div className="absolute top-4 right-4 z-10 flex flex-col gap-2 max-w-[200px] sm:max-w-none">
         {/* زر تحديد الموقع الحالي */}
-        <button
-          onClick={handleLocateUser}
-          disabled={isLocating}
-          title="تحديد موقعي الحالي"
-          className="flex items-center gap-2 px-3 py-2 bg-white/95 dark:bg-slate-800/95 backdrop-blur text-slate-800 dark:text-white rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition text-xs font-bold"
-        >
-          <Crosshair className={`w-4 h-4 text-blue-600 ${isLocating ? 'animate-spin' : ''}`} />
-          <span className="hidden sm:inline">موقعي الحالي</span>
-        </button>
+        {settings.showMapLocateButton && (
+          <button
+            onClick={handleLocateUser}
+            disabled={isLocating}
+            title="تحديد موقعي الحالي"
+            className="flex items-center gap-2 px-3 py-2 bg-white/95 dark:bg-slate-800/95 backdrop-blur text-slate-800 dark:text-white rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition text-xs font-bold"
+          >
+            <Crosshair className={`w-4 h-4 text-blue-600 ${isLocating ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">موقعي الحالي</span>
+          </button>
+        )}
 
         {/* زر النقر على الخريطة لتحديد الموقع يدوياً */}
-        <button
-          onClick={() => setIsPickingLocation(!isPickingLocation)}
-          title="انقر على أي نقطة في الخريطة لتحديد مكانك"
-          className={`flex items-center gap-2 px-3 py-2 rounded-xl shadow-lg border transition text-xs font-bold ${
-            isPickingLocation
-              ? 'bg-amber-600 text-white animate-pulse border-amber-400 ring-2 ring-amber-300'
-              : 'bg-white/95 dark:bg-slate-800/95 backdrop-blur text-slate-800 dark:text-white border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
-          }`}
-        >
-          <MapPin className={`w-4 h-4 ${isPickingLocation ? 'text-white' : 'text-amber-500'}`} />
-          <span className="hidden sm:inline">{isPickingLocation ? 'انقر بالخريطة...' : 'تحديد بالخريطة'}</span>
-        </button>
+        {settings.showMapPickButton && (
+          <button
+            onClick={() => setIsPickingLocation(!isPickingLocation)}
+            title="انقر على أي نقطة في الخريطة لتحديد مكانك"
+            className={`flex items-center gap-2 px-3 py-2 rounded-xl shadow-lg border transition text-xs font-bold ${
+              isPickingLocation
+                ? 'bg-amber-600 text-white animate-pulse border-amber-400 ring-2 ring-amber-300'
+                : 'bg-white/95 dark:bg-slate-800/95 backdrop-blur text-slate-800 dark:text-white border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
+            }`}
+          >
+            <MapPin className={`w-4 h-4 ${isPickingLocation ? 'text-white' : 'text-amber-500'}`} />
+            <span className="hidden sm:inline">{isPickingLocation ? 'انقر بالخريطة...' : 'تحديد بالخريطة'}</span>
+          </button>
+        )}
 
         {/* زر أقرب محطة غاز */}
-        <button
-          onClick={() => handleFindClosestQuick('cngRefuel')}
-          title="أقرب محطة تموين غاز"
-          className="flex items-center gap-2 px-3 py-2 bg-emerald-600/95 hover:bg-emerald-700 text-white rounded-xl shadow-lg transition text-xs font-bold"
-        >
-          <Flame className="w-4 h-4 text-emerald-200" />
-          <span className="hidden sm:inline">أقرب محطة غاز</span>
-        </button>
+        {settings.showMapQuickCng && (
+          <button
+            onClick={() => handleFindClosestQuick('cngRefuel')}
+            title="أقرب محطة تموين غاز"
+            className="flex items-center gap-2 px-3 py-2 bg-emerald-600/95 hover:bg-emerald-700 text-white rounded-xl shadow-lg transition text-xs font-bold"
+          >
+            <Flame className="w-4 h-4 text-emerald-200" />
+            <span className="hidden sm:inline">أقرب محطة غاز</span>
+          </button>
+        )}
 
         {/* زر أقرب مركز فحص أسطوانات */}
-        <button
-          onClick={() => handleFindClosestQuick('cylinderTesting')}
-          title="أقرب مركز لفحص الأسطوانات"
-          className="flex items-center gap-2 px-3 py-2 bg-purple-600/95 hover:bg-purple-700 text-white rounded-xl shadow-lg transition text-xs font-bold"
-        >
-          <ShieldCheck className="w-4 h-4 text-purple-200" />
-          <span className="hidden sm:inline">فحص الأسطوانات</span>
-        </button>
+        {settings.showMapQuickCylinder && (
+          <button
+            onClick={() => handleFindClosestQuick('cylinderTesting')}
+            title="أقرب مركز لفحص الأسطوانات"
+            className="flex items-center gap-2 px-3 py-2 bg-purple-600/95 hover:bg-purple-700 text-white rounded-xl shadow-lg transition text-xs font-bold"
+          >
+            <ShieldCheck className="w-4 h-4 text-purple-200" />
+            <span className="hidden sm:inline">فحص الأسطوانات</span>
+          </button>
+        )}
 
         {/* زر أقرب مركز زيوت BP */}
-        <button
-          onClick={() => handleFindClosestQuick('bpOilCenter')}
-          title="أقرب مركز زيوت BP كاسترول"
-          className="flex items-center gap-2 px-3 py-2 bg-blue-600/95 hover:bg-blue-700 text-white rounded-xl shadow-lg transition text-xs font-bold"
-        >
-          <Droplets className="w-4 h-4 text-blue-200" />
-          <span className="hidden sm:inline">مركز زيوت BP</span>
-        </button>
+        {settings.showMapQuickBp && (
+          <button
+            onClick={() => handleFindClosestQuick('bpOilCenter')}
+            title="أقرب مركز زيوت BP كاسترول"
+            className="flex items-center gap-2 px-3 py-2 bg-blue-600/95 hover:bg-blue-700 text-white rounded-xl shadow-lg transition text-xs font-bold"
+          >
+            <Droplets className="w-4 h-4 text-blue-200" />
+            <span className="hidden sm:inline">مركز زيوت BP</span>
+          </button>
+        )}
       </div>
 
       {/* زر تبديل نمط الخريطة (قمر صناعي / شوارع / هادئ) */}
-      <div className="absolute top-4 left-4 z-10">
-        <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur p-1 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 flex items-center gap-1 text-xs">
-          <button
-            onClick={() => setMapType('voyager')}
-            className={`px-2 py-1 rounded-lg font-medium transition ${
-              mapType === 'voyager'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-            }`}
-          >
-            واضحة
-          </button>
-          <button
-            onClick={() => setMapType('osm')}
-            className={`px-2 py-1 rounded-lg font-medium transition ${
-              mapType === 'osm'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-            }`}
-          >
-            OSM
-          </button>
-          <button
-            onClick={() => setMapType('dark')}
-            className={`px-2 py-1 rounded-lg font-medium transition ${
-              mapType === 'dark'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-            }`}
-          >
-            ليلي
-          </button>
+      {settings.showMapTypeSwitcher && (
+        <div className="absolute top-4 left-4 z-10">
+          <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur p-1 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 flex items-center gap-1 text-xs">
+            <button
+              onClick={() => setMapType('voyager')}
+              className={`px-2 py-1 rounded-lg font-medium transition ${
+                mapType === 'voyager'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+              }`}
+            >
+              واضحة
+            </button>
+            <button
+              onClick={() => setMapType('osm')}
+              className={`px-2 py-1 rounded-lg font-medium transition ${
+                mapType === 'osm'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+              }`}
+            >
+              OSM
+            </button>
+            <button
+              onClick={() => setMapType('dark')}
+              className={`px-2 py-1 rounded-lg font-medium transition ${
+                mapType === 'dark'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+              }`}
+            >
+              ليلي
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* دلالات الألوان في الركن السفلي */}
       <div className="absolute bottom-4 right-4 z-10 hidden md:flex items-center gap-2 bg-white/90 dark:bg-slate-800/90 backdrop-blur px-3 py-1.5 rounded-xl text-[11px] shadow border border-slate-200 dark:border-slate-700">

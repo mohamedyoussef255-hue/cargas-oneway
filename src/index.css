@@ -1,1 +1,23 @@
 @import "tailwindcss";
+
+:root {
+  --theme-primary: #059669;
+  --theme-primary-hover: #047857;
+  --theme-primary-light: #ecfdf5;
+  --theme-secondary: #0d9488;
+  --theme-accent: #10b981;
+}
+
+/* دعم التبديل السلس للثيم والألوان */
+html, body {
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* أنماط البطاقات والأزرار المخصصة عند تغيير الألوان */
+.btn-primary-custom {
+  background-color: var(--theme-primary);
+  color: #ffffff;
+}
+.btn-primary-custom:hover {
+  background-color: var(--theme-primary-hover);
+}

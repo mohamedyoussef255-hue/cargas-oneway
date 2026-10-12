@@ -42,6 +42,21 @@ export interface AppSettings {
   moeenVoiceEnabled: boolean;
   moeenGreetingText: string;
 
+  // التحكم في ظهور وإخفاء الأيقونات وعناصر الواجهة
+  showLocationButton: boolean;       // أيقونة وزر موقعي (GPS)
+  showThemeToggle: boolean;          // أيقونة الوضع الليلي / النهاري
+  showStatsBar: boolean;             // شريط إحصائيات المحطات
+  showFilterBar: boolean;            // شريط البحث والفلاتر
+  showClosestButton: boolean;        // زر أقرب محطة
+  showVoiceSearchButton: boolean;    // زر البحث الصوتي
+  showMapLocateButton: boolean;      // زر موقعي على الخريطة
+  showMapPickButton: boolean;        // زر التحديد بالخريطة
+  showMapQuickCng: boolean;          // زر أقرب محطة غاز السريع على الخريطة
+  showMapQuickCylinder: boolean;     // زر فحص الأسطوانات السريع على الخريطة
+  showMapQuickBp: boolean;           // زر زيوت BP السريع على الخريطة
+  showMapTypeSwitcher: boolean;      // أزرار نمط الخريطة
+  showStationCards: boolean;         // بطاقات وقائمة المحطات
+
   // التحكم في نصوص وعناوين الواجهة
   showFreeNavBanner: boolean;
   freeNavBannerText: string;
@@ -62,8 +77,14 @@ export interface AppSettings {
   showCompanyInfo: boolean;
   companyName: string;
 
+  // بنتونة الألوان ومظهر التطبيق الشامل
+  paletteId: string;
+  primaryColor: string;
+  secondaryColor: string;
+  accentColor: string;
+  themeMode: 'light' | 'dark' | 'auto';
+
   // الخريطة والمظهر
-  accentColor: 'emerald' | 'blue' | 'amber' | 'slate';
   defaultMapCenter: [number, number];
   defaultZoom: number;
 }

@@ -26,7 +26,22 @@ import {
   Check,
   Type,
   CheckSquare,
+  Eye,
+  EyeOff,
+  Bot,
+  Crosshair,
+  Compass,
+  MapPin,
+  Mic,
+  Moon,
+  Sun,
+  Layers,
+  MessageSquare,
+  Send,
+  FileSpreadsheet,
 } from 'lucide-react';
+import { AdminThemeColorsTab } from './admin/AdminThemeColorsTab';
+import { AdminExcelImportTab } from './admin/AdminExcelImportTab';
 
 export const AdminModal: React.FC = () => {
   const {
@@ -47,6 +62,9 @@ export const AdminModal: React.FC = () => {
     updateSettings,
     normalizeAllStations,
     saveAllDataNow,
+    theme,
+    setTheme,
+    toggleTheme,
   } = useApp();
 
   // نموذج تسجيل الدخول بالرقم السري
@@ -54,7 +72,16 @@ export const AdminModal: React.FC = () => {
   const [pinError, setPinError] = useState(false);
 
   // التبويب النشط
-  const [activeTab, setActiveTab] = useState<'kml_upload' | 'station_logos' | 'stations_crud' | 'text_control' | 'branding_settings'>('stations_crud');
+  const [activeTab, setActiveTab] = useState<
+    | 'stations_crud'
+    | 'excel_import'
+    | 'theme_colors'
+    | 'kml_upload'
+    | 'station_logos'
+    | 'text_control'
+    | 'branding_settings'
+    | 'visibility_control'
+  >('stations_crud');
 
   // حالة استيراد ملفات KML / KMZ
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -89,6 +116,44 @@ export const AdminModal: React.FC = () => {
   const showToast = (msg: string) => {
     setAdminToast(msg);
     setTimeout(() => setAdminToast(null), 3000);
+  };
+
+  // حالة محادثة واستشارة المساعد مُعين الخاصة بمدير النظام
+  const [adminMoeenInput, setAdminMoeenInput] = useState('');
+  const [adminMoeenChat, setAdminMoeenChat] = useState<Array<{ sender: 'admin' | 'moeen'; text: string }>>([
+    {
+      sender: 'moeen',
+      text: 'يا مراحب بيك يا ريس! أنا "مُعين" مساعدك الذكي ومستشارك. حتى لو خفيتني من صفحات المستخدمين بقرار إداري، أنا متاح هنا في خدمتك وتحت أمرك لأي استشارة هندسية أو برمجية أو إحصائية تخص المحطات!',
+    },
+  ]);
+
+  const handleAdminMoeenSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminMoeenInput.trim()) return;
+
+    const userText = adminMoeenInput.trim();
+    setAdminMoeenChat((prev) => [...prev, { sender: 'admin', text: userText }]);
+    setAdminMoeenInput('');
+
+    setTimeout(() => {
+      let reply = '';
+      const lower = userText.toLowerCase();
+      if (lower.includes('كام') || lower.includes('عدد') || lower.includes('احصائيات')) {
+        const cngCount = stations.filter((s) => s.services.cngRefuel).length;
+        const bpCount = stations.filter((s) => s.services.bpOilCenter).length;
+        const testCount = stations.filter((s) => s.services.cylinderTesting).length;
+        reply = `بص يا باشا، عندنا حالياً ${stations.length} محطة مسجلة في المنظومة. منها ${cngCount} محطة لتموين الغاز الطبيعي، و${bpCount} مركز زيوت BP كاسترول، و${testCount} مركز لفحص واختبار الأسطوانات. المنظومة مستقرة وشغالة بأعلى كفاءة!`;
+      } else if (lower.includes('كارجاس') || lower.includes('مصدق') || lower.includes('الاستاد') || lower.includes('التعاون')) {
+        reply = `تمام يا فندم، تم تطبيق قاعدة كارجاس الكاملة: كل محطة بتبدأ بـ "كارجاس"، زي "كارجاس مصدق"، "كارجاس الاستاد التعاون"، "كارجاس رشدي التعاون"، و"كارجاس ألماظة". وألغينا الترقيمات 1 و 2، وكل المحطات موحدة لتموين الغاز والزيوت!`;
+      } else if (lower.includes('امان') || lower.includes('سلامة') || lower.includes('stop')) {
+        reply = `أنظمة السلامة وSTOP هي خط الدفاع الأول، ضغط تموين الغاز 220 بار بيتطلب فحص صمامات الأمان، والتأكد من شهادة الفحص الدوري للأسطوانة كل 3 أو 5 سنوات حسب نوعها، مع الالتزام بأدوات الوقاية الشخصية PPE.`;
+      } else if (lower.includes('عزوتي') || lower.includes('محمد عبد الرحمن')) {
+        reply = `شركة عزوتي للبرمجيات وتكنولوجيا المعلومات ومطورنا المهندس محمد عبد الرحمن يوسف صمموا المنظومة دي كمعمارية برمجية متطورة تخدم ملاك السيارات ومحطات كارجاس بأعلى سرعة ومرونة.`;
+      } else {
+        reply = `تمام يا ريس، سمعتك وفهمتك كويس جداً! طلبك حاضر ومعاك خطوة بخطوة، تقدر تتحكم في ظهور وإخفاء أي عنصر أو تعديل أي اسم من لوحة التحكم وتحفظ التعديلات فوراً.`;
+      }
+      setAdminMoeenChat((prev) => [...prev, { sender: 'moeen', text: reply }]);
+    }, 400);
   };
 
   // نموذج محطة جديدة
@@ -500,6 +565,30 @@ export const AdminModal: React.FC = () => {
           </button>
 
           <button
+            onClick={() => setActiveTab('excel_import')}
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm whitespace-nowrap transition ${
+              activeTab === 'excel_import'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800'
+            }`}
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>استيراد مراكز التحويل والزيوت والفحص (Excel / PDF)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('theme_colors')}
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm whitespace-nowrap transition ${
+              activeTab === 'theme_colors'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800'
+            }`}
+          >
+            <Palette className="w-4 h-4" />
+            <span>بنتونة الألوان والنظام النهاري والليلي</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('kml_upload')}
             className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm whitespace-nowrap transition ${
               activeTab === 'kml_upload'
@@ -546,10 +635,44 @@ export const AdminModal: React.FC = () => {
             <Lock className="w-4 h-4" />
             <span>شعار التطبيق وكلمة السر</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('visibility_control')}
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm whitespace-nowrap transition ${
+              activeTab === 'visibility_control'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800'
+            }`}
+          >
+            <Eye className="w-4 h-4" />
+            <span>التحكم في الأيقونات والظهور</span>
+          </button>
         </div>
 
         {/* المحتوى الداخلي للتبويبات */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+          {/* ===================== التبويب 2: استيراد مراكز التحويل والزيوت والفحص (Excel / PDF) ===================== */}
+          {activeTab === 'excel_import' && (
+            <AdminExcelImportTab
+              stations={stations}
+              importStations={importStations}
+              saveAllDataNow={saveAllDataNow}
+              showToast={showToast}
+            />
+          )}
+
+          {/* ===================== التبويب 3: بنتونة الألوان ومظهر التطبيق والنظام النهاري والليلي ===================== */}
+          {activeTab === 'theme_colors' && (
+            <AdminThemeColorsTab
+              settings={settings}
+              updateSettings={updateSettings}
+              theme={theme}
+              setTheme={setTheme}
+              showToast={showToast}
+              onSaveAll={handleSaveAllChanges}
+            />
+          )}
+
           {/* ===================== التبويب 1: إدارة المحطات (CRUD وحذف المحطات) ===================== */}
           {activeTab === 'stations_crud' && (
             <div className="space-y-4">
@@ -1273,6 +1396,503 @@ export const AdminModal: React.FC = () => {
                   <Save className="w-4 h-4" />
                   <span>حفظ كلمة السر وإعدادات الشعار</span>
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* ===================== التبويب 6: التحكم في الأيقونات والظهور والإخفاء ===================== */}
+          {activeTab === 'visibility_control' && (
+            <div className="space-y-6">
+              {/* ترويسة التبويب */}
+              <div className="bg-gradient-to-l from-slate-900 to-slate-800 text-white p-5 rounded-2xl shadow-sm border border-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <h4 className="text-base font-extrabold flex items-center gap-2">
+                    <Eye className="w-5 h-5 text-emerald-400" />
+                    التحكم الشامل في ظهور وإخفاء الأيقونات وعناصر الواجهة
+                  </h4>
+                  <p className="text-xs text-slate-300 mt-1 max-w-xl leading-relaxed">
+                    تحكم كامل فيما يظهر أو يختفي من صفحات المستخدمين بنقرة زر واحدة. يمكنك إخفاء المساعد "مُعين" أو أي أيقونة أخرى مع بقائها متاحة لك كمدير.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => {
+                      updateSettings({
+                        enableMoeen: true,
+                        showLocationButton: true,
+                        showThemeToggle: true,
+                        showStatsBar: true,
+                        showFilterBar: true,
+                        showClosestButton: true,
+                        showVoiceSearchButton: true,
+                        showMapLocateButton: true,
+                        showMapPickButton: true,
+                        showMapQuickCng: true,
+                        showMapQuickCylinder: true,
+                        showMapQuickBp: true,
+                        showMapTypeSwitcher: true,
+                        showStationCards: true,
+                        showFreeNavBanner: true,
+                      });
+                      showToast('تم إظهار وتفعيل كافة الأيقونات والعناصر!');
+                    }}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition shadow-xs"
+                  >
+                    إظهار الكل
+                  </button>
+                  <button
+                    onClick={() => {
+                      updateSettings({
+                        enableMoeen: false,
+                        showStatsBar: false,
+                        showVoiceSearchButton: false,
+                        showMapQuickCng: false,
+                        showMapQuickCylinder: false,
+                        showMapQuickBp: false,
+                        showStationCards: false,
+                      });
+                      showToast('تم تطبيق الوضع المبسط (الخريطة الكاملة وموقعي)!');
+                    }}
+                    className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold rounded-xl transition"
+                  >
+                    الوضع المبسط
+                  </button>
+                </div>
+              </div>
+
+              {/* 1. قسم المساعد الذكي مُعين */}
+              <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center">
+                      <Bot className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h5 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
+                        المساعد الذكي "مُعيـن"
+                      </h5>
+                      <p className="text-[11px] text-slate-500">
+                        التحكم في ظهور المساعد بالموقع للمستخدمين وصوته الترحيبي
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                  {/* تفعيل / إخفاء مُعين من صفحات المستخدمين */}
+                  <label className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-emerald-500 transition">
+                    <div className="flex items-center gap-2.5">
+                      {settings.enableMoeen ? (
+                        <Eye className="w-4 h-4 text-emerald-600" />
+                      ) : (
+                        <EyeOff className="w-4 h-4 text-slate-400" />
+                      )}
+                      <div>
+                        <span className="font-bold text-xs text-slate-800 dark:text-slate-200 block">
+                          ظهور مُعين للمستخدمين
+                        </span>
+                        <span className="text-[10px] text-slate-500">
+                          {settings.enableMoeen ? 'ظاهر حالياً في الواجهة والزر العائم' : 'مخفي عن المستخدمين (متاح للإدارة فقط)'}
+                        </span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.enableMoeen}
+                      onChange={(e) => updateSettings({ enableMoeen: e.target.checked, _explicitAdminMoeen: e.target.checked } as any)}
+                      className="w-5 h-5 accent-emerald-600 rounded cursor-pointer"
+                    />
+                  </label>
+
+                  {/* الصوت التلقائي لمُعين */}
+                  <label className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-emerald-500 transition">
+                    <div className="flex items-center gap-2.5">
+                      <Mic className={`w-4 h-4 ${settings.moeenVoiceEnabled ? 'text-emerald-600' : 'text-slate-400'}`} />
+                      <div>
+                        <span className="font-bold text-xs text-slate-800 dark:text-slate-200 block">
+                          الصوت التلقائي لمُعين
+                        </span>
+                        <span className="text-[10px] text-slate-500">
+                          نطق الرسالة الترحيبية وتوجيهات الملاحة بصوت بشري مصري
+                        </span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.moeenVoiceEnabled}
+                      onChange={(e) => updateSettings({ moeenVoiceEnabled: e.target.checked })}
+                      className="w-5 h-5 accent-emerald-600 rounded cursor-pointer"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* 2. أيقونات الهيدر أعلى الصفحة */}
+              <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+                <h5 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                  <Crosshair className="w-4 h-4 text-blue-600" />
+                  <span>أيقونات وأزرار شريط الرأس (الهيدر)</span>
+                </h5>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {/* زر موقعي */}
+                  <label className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-blue-500 transition">
+                    <div className="flex items-center gap-2">
+                      <Crosshair className="w-4 h-4 text-blue-500" />
+                      <div>
+                        <span className="font-bold text-xs block">زر "موقعي" GPS</span>
+                        <span className="text-[10px] text-slate-500">تحديد موقع المستخدم المباشر</span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.showLocationButton}
+                      onChange={(e) => updateSettings({ showLocationButton: e.target.checked })}
+                      className="w-5 h-5 accent-blue-600 rounded cursor-pointer"
+                    />
+                  </label>
+
+                  {/* زر تبديل الوضع الليلي / النهاري */}
+                  <label className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-amber-500 transition">
+                    <div className="flex items-center gap-2">
+                      <Sun className="w-4 h-4 text-amber-500" />
+                      <div>
+                        <span className="font-bold text-xs block">زر الوضع الليلي / النهاري</span>
+                        <span className="text-[10px] text-slate-500">شمس وقمر لتبديل المظهر</span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.showThemeToggle}
+                      onChange={(e) => updateSettings({ showThemeToggle: e.target.checked })}
+                      className="w-5 h-5 accent-amber-600 rounded cursor-pointer"
+                    />
+                  </label>
+
+                  {/* شريط الإحصائيات المختصر */}
+                  <label className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-emerald-500 transition">
+                    <div className="flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-emerald-600" />
+                      <div>
+                        <span className="font-bold text-xs block">شريط إحصائيات المحطات</span>
+                        <span className="text-[10px] text-slate-500">عداد الغاز والزيوت والفحص</span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.showStatsBar}
+                      onChange={(e) => updateSettings({ showStatsBar: e.target.checked })}
+                      className="w-5 h-5 accent-emerald-600 rounded cursor-pointer"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* 3. شريط البحث والفلاتر */}
+              <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+                <h5 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                  <Search className="w-4 h-4 text-emerald-600" />
+                  <span>شريط البحث والفلاتر والبحث الصوتي</span>
+                </h5>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {/* شريط الفلاتر كاملاً */}
+                  <label className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-emerald-500 transition">
+                    <div className="flex items-center gap-2">
+                      <Search className="w-4 h-4 text-emerald-600" />
+                      <div>
+                        <span className="font-bold text-xs block">شريط البحث بالكامل</span>
+                        <span className="text-[10px] text-slate-500">البحث وفلاتر المحافظات</span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.showFilterBar}
+                      onChange={(e) => updateSettings({ showFilterBar: e.target.checked })}
+                      className="w-5 h-5 accent-emerald-600 rounded cursor-pointer"
+                    />
+                  </label>
+
+                  {/* زر أقرب محطة لي */}
+                  <label className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-teal-500 transition">
+                    <div className="flex items-center gap-2">
+                      <Compass className="w-4 h-4 text-teal-600" />
+                      <div>
+                        <span className="font-bold text-xs block">زر "أقرب محطة لي"</span>
+                        <span className="text-[10px] text-slate-500">حساب أقرب محطة بالمسافة</span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.showClosestButton}
+                      onChange={(e) => updateSettings({ showClosestButton: e.target.checked })}
+                      className="w-5 h-5 accent-teal-600 rounded cursor-pointer"
+                    />
+                  </label>
+
+                  {/* زر البحث الصوتي */}
+                  <label className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-rose-500 transition">
+                    <div className="flex items-center gap-2">
+                      <Mic className="w-4 h-4 text-rose-500" />
+                      <div>
+                        <span className="font-bold text-xs block">زر "البحث الصوتي"</span>
+                        <span className="text-[10px] text-slate-500">الأوامر الصوتية الذكية</span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.showVoiceSearchButton}
+                      onChange={(e) => updateSettings({ showVoiceSearchButton: e.target.checked })}
+                      className="w-5 h-5 accent-rose-600 rounded cursor-pointer"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* 4. أزرار الخريطة التفاعلية والوصول السريع */}
+              <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+                <h5 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                  <Flame className="w-4 h-4 text-amber-500" />
+                  <span>أزرار الخريطة والوصول السريع</span>
+                </h5>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {/* زر موقعي على الخريطة */}
+                  <label className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-blue-500 transition">
+                    <div className="flex items-center gap-2">
+                      <Crosshair className="w-4 h-4 text-blue-600" />
+                      <div>
+                        <span className="font-bold text-xs block">زر "موقعي الحالي"</span>
+                        <span className="text-[10px] text-slate-500">الملاحة لموقعك على الخريطة</span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.showMapLocateButton}
+                      onChange={(e) => updateSettings({ showMapLocateButton: e.target.checked })}
+                      className="w-5 h-5 accent-blue-600 rounded cursor-pointer"
+                    />
+                  </label>
+
+                  {/* زر تحديد بالخريطة */}
+                  <label className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-amber-500 transition">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-amber-500" />
+                      <div>
+                        <span className="font-bold text-xs block">زر "تحديد بالخريطة"</span>
+                        <span className="text-[10px] text-slate-500">النقر اليدوي لتحديد مكانك</span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.showMapPickButton}
+                      onChange={(e) => updateSettings({ showMapPickButton: e.target.checked })}
+                      className="w-5 h-5 accent-amber-600 rounded cursor-pointer"
+                    />
+                  </label>
+
+                  {/* زر أقرب محطة غاز السريع */}
+                  <label className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-emerald-500 transition">
+                    <div className="flex items-center gap-2">
+                      <Flame className="w-4 h-4 text-emerald-600" />
+                      <div>
+                        <span className="font-bold text-xs block">زر "أقرب محطة غاز"</span>
+                        <span className="text-[10px] text-slate-500">الوصول السريع لتموين الغاز</span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.showMapQuickCng}
+                      onChange={(e) => updateSettings({ showMapQuickCng: e.target.checked })}
+                      className="w-5 h-5 accent-emerald-600 rounded cursor-pointer"
+                    />
+                  </label>
+
+                  {/* زر فحص الأسطوانات السريع */}
+                  <label className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-purple-500 transition">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-purple-600" />
+                      <div>
+                        <span className="font-bold text-xs block">زر "فحص الأسطوانات"</span>
+                        <span className="text-[10px] text-slate-500">مراكز الفحص الهيدروستاتيكي</span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.showMapQuickCylinder}
+                      onChange={(e) => updateSettings({ showMapQuickCylinder: e.target.checked })}
+                      className="w-5 h-5 accent-purple-600 rounded cursor-pointer"
+                    />
+                  </label>
+
+                  {/* زر زيوت BP السريع */}
+                  <label className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-blue-500 transition">
+                    <div className="flex items-center gap-2">
+                      <Droplets className="w-4 h-4 text-blue-600" />
+                      <div>
+                        <span className="font-bold text-xs block">زر "مركز زيوت BP"</span>
+                        <span className="text-[10px] text-slate-500">مراكز زيوت BP كاسترول</span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.showMapQuickBp}
+                      onChange={(e) => updateSettings({ showMapQuickBp: e.target.checked })}
+                      className="w-5 h-5 accent-blue-600 rounded cursor-pointer"
+                    />
+                  </label>
+
+                  {/* أزرار نمط الخريطة */}
+                  <label className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-slate-500 transition">
+                    <div className="flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-slate-600 dark:text-slate-300" />
+                      <div>
+                        <span className="font-bold text-xs block">مبدل أنماط الخريطة</span>
+                        <span className="text-[10px] text-slate-500">أنماط واضحة / OSM / ليلي</span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.showMapTypeSwitcher}
+                      onChange={(e) => updateSettings({ showMapTypeSwitcher: e.target.checked })}
+                      className="w-5 h-5 accent-slate-700 rounded cursor-pointer"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* 5. مكونات الصفحة الإضافية والقوائم */}
+              <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+                <h5 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                  <CheckSquare className="w-4 h-4 text-emerald-600" />
+                  <span>أقسام الصفحة العامة والقوائم</span>
+                </h5>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {/* قسم بطاقات المحطات */}
+                  <label className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-emerald-500 transition">
+                    <div>
+                      <span className="font-bold text-xs block">قائمة بطاقات المحطات</span>
+                      <span className="text-[10px] text-slate-500">
+                        {settings.showStationCards ? 'ظاهرة بجانب الخريطة' : 'مخفية (الخريطة بعرض كامل الشاشة)'}
+                      </span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.showStationCards}
+                      onChange={(e) => updateSettings({ showStationCards: e.target.checked })}
+                      className="w-5 h-5 accent-emerald-600 rounded cursor-pointer"
+                    />
+                  </label>
+
+                  {/* بنر الملاحة المجانية */}
+                  <label className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-emerald-500 transition">
+                    <div>
+                      <span className="font-bold text-xs block">بنر الملاحة المجانية 100%</span>
+                      <span className="text-[10px] text-slate-500">الشريط الأخضر بأعلى الصفحة</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.showFreeNavBanner}
+                      onChange={(e) => updateSettings({ showFreeNavBanner: e.target.checked })}
+                      className="w-5 h-5 accent-emerald-600 rounded cursor-pointer"
+                    />
+                  </label>
+
+                  {/* تذييل الصفحة وحقوق الملكية */}
+                  <label className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-emerald-500 transition">
+                    <div>
+                      <span className="font-bold text-xs block">حقوق الملكية والشركة</span>
+                      <span className="text-[10px] text-slate-500">ظهور بيانات الشركة في التذييل</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.showFooterCredits}
+                      onChange={(e) => updateSettings({ showFooterCredits: e.target.checked })}
+                      className="w-5 h-5 accent-emerald-600 rounded cursor-pointer"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* زر الحفظ العام لكافة التعديلات */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-200 dark:border-emerald-800">
+                <div className="flex items-center gap-2 text-xs text-emerald-900 dark:text-emerald-200">
+                  <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <span>
+                    التعديلات تطبق فوراً وتُحفظ بصورة دائمة عند الضغط على زر الحفظ أدناه.
+                  </span>
+                </div>
+
+                <button
+                  onClick={handleSaveAllChanges}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow transition shrink-0"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>حفظ التعديلات والتغييرات فوراً</span>
+                </button>
+              </div>
+
+              {/* قسم خاص: محادثة واستشارة المساعد مُعين لمدير النظام */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 sm:p-5 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-2xl bg-emerald-600 text-white flex items-center justify-center text-lg shadow">
+                      🤖
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                        استشارة المساعد الذكي "مُعيـن" لمدير النظام
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        مُعين متاح دائماً لك كمدير لمراجعة أداء التطبيق، التدقيق الفني، واستشارات السلامة والبزنس
+                      </p>
+                    </div>
+                  </div>
+
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                    مستشارك الخاص 24/7
+                  </span>
+                </div>
+
+                {/* صندوق المحادثة المباشر مع مُعين */}
+                <div className="h-48 overflow-y-auto space-y-2.5 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800 text-xs">
+                  {adminMoeenChat.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex ${item.sender === 'admin' ? 'justify-start' : 'justify-end'}`}
+                    >
+                      <div
+                        className={`max-w-[85%] p-2.5 rounded-2xl leading-relaxed text-xs ${
+                          item.sender === 'admin'
+                            ? 'bg-slate-800 text-white rounded-br-none'
+                            : 'bg-emerald-600 text-white rounded-bl-none shadow-xs'
+                        }`}
+                      >
+                        {item.text}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* حقل إرسال سؤال لمُعين */}
+                <form onSubmit={handleAdminMoeenSubmit} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={adminMoeenInput}
+                    onChange={(e) => setAdminMoeenInput(e.target.value)}
+                    placeholder="اسأل مُعين عن المحطات، إحصائيات الغاز، أنظمة السلامة STOP، أو راجع أفكار التطبيق..."
+                    className="flex-1 py-2 px-3 text-xs bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow flex items-center gap-1.5 transition"
+                  >
+                    <span>إرسال</span>
+                    <Send className="w-3.5 h-3.5 rotate-180" />
+                  </button>
+                </form>
               </div>
             </div>
           )}

@@ -168,6 +168,10 @@ export const FilterBar: React.FC = () => {
     }
   };
 
+  if (!settings.showFilterBar) {
+    return null;
+  }
+
   return (
     <div className="w-full bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-700 p-3 sm:p-4 space-y-3">
       {/* الصف الأول: حقل البحث النصي + زر البحث الصوتي + زر أقرب محطة + اختيار المحافظة */}
@@ -193,18 +197,20 @@ export const FilterBar: React.FC = () => {
         </div>
 
         {/* زر البحث الصوتي بالذكاء الاصطناعي والميكروفون */}
-        <button
-          onClick={handleToggleVoiceSearch}
-          className={`flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl font-bold text-xs transition duration-150 shrink-0 ${
-            isListening
-              ? 'bg-rose-600 text-white animate-pulse shadow-lg ring-2 ring-rose-400'
-              : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-800'
-          }`}
-          title="بحث صوتي: قل 'أقرب محطة' أو 'زيوت BP' أو 'فحص أسطوانات'"
-        >
-          {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-          <span>{isListening ? 'جاري الاستماع...' : (settings.voiceSearchButtonText || 'بحث صوتي')}</span>
-        </button>
+        {settings.showVoiceSearchButton && (
+          <button
+            onClick={handleToggleVoiceSearch}
+            className={`flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl font-bold text-xs transition duration-150 shrink-0 ${
+              isListening
+                ? 'bg-rose-600 text-white animate-pulse shadow-lg ring-2 ring-rose-400'
+                : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-800'
+            }`}
+            title="بحث صوتي: قل 'أقرب محطة' أو 'زيوت BP' أو 'فحص أسطوانات'"
+          >
+            {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            <span>{isListening ? 'جاري الاستماع...' : (settings.voiceSearchButtonText || 'بحث صوتي')}</span>
+          </button>
+        )}
 
         {/* اختيار المحافظة */}
         <div className="sm:w-44 shrink-0">
@@ -223,13 +229,15 @@ export const FilterBar: React.FC = () => {
         </div>
 
         {/* زر أقرب محطة لي (Haversine) */}
-        <button
-          onClick={handleFindClosestClick}
-          className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-gradient-to-l from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl font-bold text-xs sm:text-sm shadow-sm hover:shadow transition shrink-0"
-        >
-          <Compass className="w-4 h-4" />
-          <span>{settings.closestStationButtonText || 'أقرب محطة لي'}</span>
-        </button>
+        {settings.showClosestButton && (
+          <button
+            onClick={handleFindClosestClick}
+            className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-gradient-to-l from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl font-bold text-xs sm:text-sm shadow-sm hover:shadow transition shrink-0"
+          >
+            <Compass className="w-4 h-4" />
+            <span>{settings.closestStationButtonText || 'أقرب محطة لي'}</span>
+          </button>
+        )}
       </div>
 
       {/* تنبيه الاستماع الصوتي إن كان نشطاً */}

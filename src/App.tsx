@@ -135,7 +135,7 @@ const MainLayout: React.FC = () => {
           {/* قسم الخريطة التفاعلية */}
           <div
             className={`transition-all duration-300 ${
-              viewMode === 'map'
+              !settings.showStationCards || viewMode === 'map'
                 ? 'col-span-12 h-[75vh]'
                 : viewMode === 'list'
                 ? 'hidden'
@@ -151,15 +151,16 @@ const MainLayout: React.FC = () => {
           </div>
 
           {/* قسم قائمة بطاقات المحطات */}
-          <div
-            className={`transition-all duration-300 ${
-              viewMode === 'list'
-                ? 'col-span-12'
-                : viewMode === 'map'
-                ? 'hidden'
-                : 'col-span-12 lg:col-span-5 h-[500px] lg:h-[720px] overflow-y-auto pr-1'
-            }`}
-          >
+          {settings.showStationCards && (
+            <div
+              className={`transition-all duration-300 ${
+                viewMode === 'list'
+                  ? 'col-span-12'
+                  : viewMode === 'map'
+                  ? 'hidden'
+                  : 'col-span-12 lg:col-span-5 h-[500px] lg:h-[720px] overflow-y-auto pr-1'
+              }`}
+            >
             {filteredStations.length === 0 ? (
               <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 text-center border border-slate-200 dark:border-slate-700 space-y-3">
                 <div className="w-16 h-16 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center mx-auto text-2xl">
@@ -191,11 +192,12 @@ const MainLayout: React.FC = () => {
               </div>
             )}
           </div>
+          )}
         </div>
       </main>
 
-      {/* المساعد الذكي "مُعين" */}
-      <MoeenAssistant />
+      {/* المساعد الذكي "مُعين" (ملغي ومخفي بناء على طلبك مع إمكانية التفعيل من لوحة المدير) */}
+      {settings.enableMoeen && <MoeenAssistant />}
 
       {/* نافذة التفاصيل المنبثقة للمحطة */}
       <StationDetailModal

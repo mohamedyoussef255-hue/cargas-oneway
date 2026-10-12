@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useCall
 import { Station, StationServices, AppSettings } from '../types/station';
 import { calculateHaversineDistance } from '../utils/geo';
 import { applyCargasNetworkRules, normalizeCargasStationName } from '../utils/cargasRules';
+import { INITIAL_STATIONS } from '../data/initialStations';
+import { applyThemeToDocument } from '../utils/themePalettes';
 
 interface AppContextType {
   stations: Station[];
@@ -9,6 +11,7 @@ interface AppContextType {
   settings: AppSettings;
   updateSettings: (newSettings: Partial<AppSettings>) => void;
   userLocation: { lat: number; lng: number; accuracy?: number } | null;
+  userLocateTrigger: number;
   isLocating: boolean;
   locationError: string | null;
   requestUserLocation: (force?: boolean) => Promise<{ lat: number; lng: number; accuracy?: number } | null>;
@@ -41,6 +44,7 @@ interface AppContextType {
   clearStationLogo: (targetStationIds?: string[]) => void;
   findClosestStation: (service?: keyof StationServices) => (Station & { distance?: number }) | null;
   theme: 'light' | 'dark';
+  setTheme: (theme: 'light' | 'dark') => void;
   toggleTheme: () => void;
 }
 
@@ -51,11 +55,26 @@ const DEFAULT_SETTINGS: AppSettings = {
   defaultStationLogoUrl: null,
   adminPin: '0000',
 
-  // إعدادات المساعد مُعين
-  enableMoeen: true,
-  moeenVoiceEnabled: true,
+  // إعدادات المساعد مُعين (تم إلغاؤه وإخفاؤه بناءً على طلبك مع إمكانية التفعيل من لوحة المدير)
+  enableMoeen: false,
+  moeenVoiceEnabled: false,
   moeenGreetingText:
     'يا هلا بيك يا باشا! أنا "مُعين" مساعدك الذكي، معاك خطوة بخطوة عشان تدل على أقرب محطة كارجاس، تمون غاز، تغير زيت BP، أو تفحص الأسطوانة. قولي محتاج إيه وأنا تحت أمرك!',
+
+  // التحكم في ظهور وإخفاء الأيقونات وعناصر الواجهة
+  showLocationButton: true,
+  showThemeToggle: true,
+  showStatsBar: true,
+  showFilterBar: true,
+  showClosestButton: true,
+  showVoiceSearchButton: true,
+  showMapLocateButton: true,
+  showMapPickButton: true,
+  showMapQuickCng: true,
+  showMapQuickCylinder: true,
+  showMapQuickBp: true,
+  showMapTypeSwitcher: true,
+  showStationCards: true,
 
   // النصوص والعناوين
   showFreeNavBanner: true,
@@ -78,7 +97,13 @@ const DEFAULT_SETTINGS: AppSettings = {
   showCompanyInfo: false,
   companyName: 'شركة عزوتي للبرمجيات وتكنولوجيا المعلومات',
 
-  accentColor: 'emerald',
+  // بنتونة الألوان ومظهر التطبيق الشامل
+  paletteId: 'cargas_emerald',
+  primaryColor: '#059669',
+  secondaryColor: '#0d9488',
+  accentColor: '#10b981',
+  themeMode: 'light',
+
   defaultMapCenter: [30.0444, 31.2357], // القاهرة
   defaultZoom: 11,
 };
@@ -91,7 +116,7 @@ const USER_LOC_STORAGE_KEY = 'ezouti_gas_user_loc_v2';
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // 1. المحطات (تطبيق قاعدة كارجاس الكاملة: بدء الاسم بكارجاس، إلغاء أرقام 1 و 2، وتفعيل تموين غاز وزيوت)
+  // 1. المحطات (تحميل المحطات المعتمدة مع توحيد كارجاس والأسماء)
   const [stations, setStations] = useState<Station[]>(() => {
     try {
       const saved = localStorage.getItem(STATIONS_STORAGE_KEY);
@@ -102,14 +127,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
     } catch {}
-    return []; // فارغة تماماً بناءً على طلب المستخدم للاعتماد على مستوردات KMZ
+    return INITIAL_STATIONS;
   });
 
-  // 2. الإعدادات
+  // 2. الإعدادات (معين ملغي افتراضياً كما طُلب)
   const [settings, setSettings] = useState<AppSettings>(() => {
     try {
       const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
-      if (saved) return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          ...DEFAULT_SETTINGS,
+          ...parsed,
+          // إلغاء معين افتراضياً بناء على أمر المستخدم "الغي معين"
+          enableMoeen: parsed.enableMoeen === true && parsed._explicitAdminMoeen ? true : false,
+        };
+      }
     } catch {}
     return DEFAULT_SETTINGS;
   });
@@ -165,6 +198,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {}
   }, [settings]);
 
+  // تطبيق بنتونة الألوان على كامل عناصر وصفحات التطبيق فور تغييرها
+  useEffect(() => {
+    applyThemeToDocument(settings.primaryColor, settings.secondaryColor, settings.accentColor);
+  }, [settings.primaryColor, settings.secondaryColor, settings.accentColor]);
+
   // حفظ الثيم
   useEffect(() => {
     try {
@@ -196,6 +234,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const userLocationRef = useRef<{ lat: number; lng: number; accuracy?: number } | null>(userLocation);
   const isLocatingRef = useRef(false);
+  const [userLocateTrigger, setUserLocateTrigger] = useState<number>(0);
 
   useEffect(() => {
     userLocationRef.current = userLocation;
@@ -206,6 +245,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const loc = { lat, lng, accuracy: 15 };
     setUserLocation(loc);
     setLocationError(null);
+    setUserLocateTrigger(Date.now());
   };
 
   // طلب وتحديد موقع المستخدم الحالي بالـ GPS الحقيقي مع تعدد مسارات الإنقاذ والـ Fallback
@@ -217,14 +257,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsLocating(true);
     setLocationError(null);
 
-    const finishSuccess = (loc: { lat: number; lng: number; accuracy?: number }) => {
-      const current = userLocationRef.current;
-      if (!current || Math.abs(current.lat - loc.lat) > 0.0001 || Math.abs(current.lng - loc.lng) > 0.0001) {
-        setUserLocation(loc);
-      }
+    const finishSuccess = (loc: { lat: number; lng: number; accuracy?: number }, isRealGps = false) => {
+      setUserLocation(loc);
       setIsLocating(false);
       isLocatingRef.current = false;
       setLocationError(null);
+      if (force || isRealGps) {
+        setUserLocateTrigger(Date.now());
+      }
       return loc;
     };
 
@@ -236,7 +276,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (!res.ok) throw new Error();
           const data = await res.json();
           if (!data || !data.success || typeof data.latitude !== 'number') throw new Error();
-          return { lat: data.latitude, lng: data.longitude, accuracy: 2500 };
+          return { lat: data.latitude, lng: data.longitude, accuracy: 2500, country: data.country_code };
         };
 
         const fetchBigData = async () => {
@@ -244,7 +284,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (!res.ok) throw new Error();
           const data = await res.json();
           if (!data || typeof data.latitude !== 'number') throw new Error();
-          return { lat: data.latitude, lng: data.longitude, accuracy: 3000 };
+          return { lat: data.latitude, lng: data.longitude, accuracy: 3000, country: data.countryCode };
         };
 
         const fetchFreeIp = async () => {
@@ -252,18 +292,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (!res.ok) throw new Error();
           const data = await res.json();
           if (!data || typeof data.latitude !== 'number') throw new Error();
-          return { lat: data.latitude, lng: data.longitude, accuracy: 3000 };
+          return { lat: data.latitude, lng: data.longitude, accuracy: 3000, country: data.countryCode };
         };
 
         const ipLoc = await Promise.any([fetchIpwhois(), fetchBigData(), fetchFreeIp()]);
         if (ipLoc) {
-          return finishSuccess(ipLoc);
+          const isWithinEgypt = ipLoc.lat >= 21.9 && ipLoc.lat <= 32.0 && ipLoc.lng >= 24.5 && ipLoc.lng <= 37.0;
+          const finalLoc = isWithinEgypt
+            ? { lat: ipLoc.lat, lng: ipLoc.lng, accuracy: ipLoc.accuracy }
+            : { lat: 30.0444, lng: 31.2357, accuracy: 4000 };
+          return finishSuccess(finalLoc, false);
         }
       } catch {}
 
-      // موقع افتراضي لوسط القاهرة عند تعذر كافة الوسائل
       const defaultLoc = userLocationRef.current || { lat: 30.0444, lng: 31.2357, accuracy: 5000 };
-      return finishSuccess(defaultLoc);
+      return finishSuccess(defaultLoc, false);
     };
 
     if (!('geolocation' in navigator)) {
@@ -273,44 +316,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return new Promise((resolve) => {
       let resolved = false;
 
-      // مؤقت مرن: بعد 3.5 ثانية إذا تأخر الرد من الـ GPS، نقوم بجلب موقع تقريبي احتياطياً بدون إلغاء الـ GPS
+      // مؤقت مرن: بعد 4 ثوانٍ إذا لم يرد الـ GPS بعد، نضع موقعاً تقريبياً مبدئياً دون إلغاء التقاط الـ GPS الحقيقي
       const softTimer = setTimeout(async () => {
         if (!resolved) {
           const interim = await tryIpFallback();
           resolve(interim);
         }
-      }, 3500);
+      }, 4000);
 
       const onGpsSuccess = (pos: GeolocationPosition) => {
-        if (resolved) return;
-        resolved = true;
         clearTimeout(softTimer);
         const loc = {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
           accuracy: pos.coords.accuracy,
         };
-        resolve(finishSuccess(loc));
+        // الموقع الحقيقي بالـ GPS يُعتمد دائماً وفوراً
+        finishSuccess(loc, true);
+        if (!resolved) {
+          resolved = true;
+          resolve(loc);
+        }
       };
 
-      // 1. تجربة GPS عالي الدقة أولاً (للهواتف والأجهزة الداعمة)
+      // فحص أذونات المتصفح إن وُجدت
+      if ('permissions' in navigator) {
+        navigator.permissions.query({ name: 'geolocation' as PermissionName }).then((status) => {
+          if (status.state === 'denied') {
+            setLocationError('تم حظر صلاحية الموقع (GPS) في المتصفح. يمكنك السماح بالوصول من أيقونة القفل/الموقع في شريط العنوان أو تحديد موقعك عبر زر "تحديد بالخريطة".');
+          }
+        }).catch(() => {});
+      }
+
+      // 1. طلب GPS عالي الدقة (Hardware GPS / Mobile)
       navigator.geolocation.getCurrentPosition(
         onGpsSuccess,
-        () => {
-          // 2. إذا فشل الـ High Accuracy (مثلاً كمبيوتر بدون شريحة GPS أو تعذر)، نجرب الدقة القياسية عبر الواي فاي
+        (err) => {
+          if (err.code === 1) {
+            setLocationError('تم حظر إذن الموقع للمتصفح. يرجى تفعيل إذن الموقع من شريط المتصفح أو النقر على "تحديد بالخريطة".');
+          }
+          // 2. إذا فشل عالي الدقة (أو انتهى وقته في الأماكن المغلقة / اللابتوب)، نجرب فوراً الدقة العادية
           navigator.geolocation.getCurrentPosition(
             onGpsSuccess,
             async () => {
-              if (resolved) return;
-              resolved = true;
-              clearTimeout(softTimer);
-              const fallback = await tryIpFallback();
-              resolve(fallback);
+              if (!resolved) {
+                resolved = true;
+                clearTimeout(softTimer);
+                const fallback = await tryIpFallback();
+                resolve(fallback);
+              }
             },
-            { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }
+            { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
           );
         },
-        { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
       );
     });
   }, []);
@@ -333,6 +392,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const current = userLocationRef.current;
             if (!current) {
               setUserLocation(loc);
+              setUserLocateTrigger(Date.now());
             } else {
               const dist = calculateHaversineDistance(current.lat, current.lng, loc.lat, loc.lng);
               // تحديث فوري إذا تحرك أكثر من 30 متراً أو زادت الدقة
@@ -352,7 +412,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         navigator.geolocation.clearWatch(watchId);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // إدارة المصادقة للوحة التحكم برمز 0000 الافتراضي
@@ -628,6 +687,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         settings,
         updateSettings,
         userLocation,
+        userLocateTrigger,
         isLocating,
         locationError,
         requestUserLocation,
@@ -660,6 +720,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         clearStationLogo,
         findClosestStation,
         theme,
+        setTheme,
         toggleTheme,
       }}
     >
