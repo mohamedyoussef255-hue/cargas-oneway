@@ -1,8 +1,10 @@
 export interface StationServices {
   cngRefuel: boolean;             // تموين غاز طبيعي
   conversionMaintenance: boolean; // تحويل وصيانة سيارات
-  bpOilCenter: boolean;           // مركز زيوت BP / Castrol
+  bpOilCenter: boolean;           // مركز زيوت BP متكامل (خدمة وتغيير زيوت وفلاتر)
+  canopyOilSales?: boolean;       // بيع زيوت أسفل المظلة (عبوات معبأة عند الطلمبات)
   cylinderTesting: boolean;       // فحص واختبار أسطوانات
+  cylinderTestingUpcoming?: boolean; // تحت التشغيل (يُكتب عليه "قريباً")
   carWash?: boolean;              // غسيل سيارات
   convenienceStore?: boolean;     // سوبرماركت / كشك
   evCharging?: boolean;           // شحن سيارات كهربائية
@@ -54,6 +56,7 @@ export interface AppSettings {
   showMapQuickCng: boolean;          // زر أقرب محطة غاز السريع على الخريطة
   showMapQuickCylinder: boolean;     // زر فحص الأسطوانات السريع على الخريطة
   showMapQuickBp: boolean;           // زر زيوت BP السريع على الخريطة
+  showMapQuickConversion?: boolean;  // زر مراكز التحويل السريع على الخريطة
   showMapTypeSwitcher: boolean;      // أزرار نمط الخريطة
   showStationCards: boolean;         // بطاقات وقائمة المحطات
 
@@ -66,7 +69,8 @@ export interface AppSettings {
 
   // تسميات الأنشطة
   cngLabel: string;
-  bpOilLabel: string;
+  bpOilLabel: string;             // مركز زيوت BP متكامل
+  canopyOilLabel?: string;        // بيع زيوت أسفل المظلة
   maintenanceLabel: string;
   cylinderLabel: string;
 

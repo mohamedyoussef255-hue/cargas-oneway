@@ -14,7 +14,7 @@ const RAW_INITIAL_STATIONS: Station[] = [
     services: {
       cngRefuel: true,
       conversionMaintenance: true,
-      bpOilCenter: true,
+      bpOilCenter: false,
       cylinderTesting: true,
       carWash: true,
       convenienceStore: true,
@@ -30,24 +30,24 @@ const RAW_INITIAL_STATIONS: Station[] = [
     id: 'sta-cargas-almaza',
     name: 'كارجاس ألماظة',
     company: 'كارجاس - Cargas',
-    lat: 30.0886,
-    lng: 31.3582,
-    address: 'طريق المطار، بجوار مستشفى الجلاء، ألماظة، مصر الجديدة (الموحدة)',
+    lat: 30.0831566,
+    lng: 31.3515105,
+    address: '312 شارع اللواء محمد إبراهيم الشيخ، ألماظة، مصر الجديدة، القاهرة (بجوار مستشفى الجلاء وطريق المطار)',
     governorate: 'القاهرة',
     city: 'مصر الجديدة',
     services: {
       cngRefuel: true,
       conversionMaintenance: true,
-      bpOilCenter: true,
-      cylinderTesting: true, // المركز الرئيسي لفحص الأسطوانات
+      bpOilCenter: false,
+      cylinderTesting: true, // المركز الرئيسي لفحص واختبار الأسطوانات
       carWash: true,
       convenienceStore: true,
     },
     phone: '0224177211',
     workingHours: '24 ساعة (الفحص 08:00 ص - 04:00 م)',
     status: 'active',
-    pressure: '225 بار',
-    notes: 'المحطة الرئيسية الموحدة لتموين الغاز وفحص واختبار أسطوانات الغاز وزيوت BP',
+    pressure: '225 بار ممتاز',
+    notes: 'المقر والمحطة المركزية لكارجاس بألماظة: تموين الغاز الطبيعي وفحص واختبار أسطوانات الغاز المعتمد والصيانة',
     rating: 4.9,
   },
   {
@@ -62,7 +62,7 @@ const RAW_INITIAL_STATIONS: Station[] = [
     services: {
       cngRefuel: true,
       conversionMaintenance: true,
-      bpOilCenter: true,
+      bpOilCenter: false,
       cylinderTesting: false,
       carWash: true,
       convenienceStore: true,
@@ -87,7 +87,7 @@ const RAW_INITIAL_STATIONS: Station[] = [
     services: {
       cngRefuel: true,
       conversionMaintenance: false,
-      bpOilCenter: true,
+      bpOilCenter: false,
       cylinderTesting: false,
       carWash: true,
       convenienceStore: true,
@@ -111,7 +111,7 @@ const RAW_INITIAL_STATIONS: Station[] = [
     services: {
       cngRefuel: true,
       conversionMaintenance: true,
-      bpOilCenter: true,
+      bpOilCenter: false,
       cylinderTesting: false,
       carWash: true,
       convenienceStore: true,
@@ -135,7 +135,7 @@ const RAW_INITIAL_STATIONS: Station[] = [
     services: {
       cngRefuel: true,
       conversionMaintenance: true,
-      bpOilCenter: true,
+      bpOilCenter: false,
       cylinderTesting: false,
       carWash: true,
       convenienceStore: true,
@@ -160,7 +160,7 @@ const RAW_INITIAL_STATIONS: Station[] = [
     services: {
       cngRefuel: true,
       conversionMaintenance: false,
-      bpOilCenter: true,
+      bpOilCenter: false,
       cylinderTesting: false,
       carWash: true,
       convenienceStore: true,
@@ -185,7 +185,7 @@ const RAW_INITIAL_STATIONS: Station[] = [
     services: {
       cngRefuel: true,
       conversionMaintenance: true,
-      bpOilCenter: true,
+      bpOilCenter: false,
       cylinderTesting: true,
       carWash: false,
       convenienceStore: true,
@@ -209,7 +209,7 @@ const RAW_INITIAL_STATIONS: Station[] = [
     services: {
       cngRefuel: true,
       conversionMaintenance: true,
-      bpOilCenter: true,
+      bpOilCenter: false,
       cylinderTesting: false,
       carWash: true,
       convenienceStore: true,
@@ -233,7 +233,7 @@ const RAW_INITIAL_STATIONS: Station[] = [
     services: {
       cngRefuel: true,
       conversionMaintenance: true,
-      bpOilCenter: true,
+      bpOilCenter: false,
       cylinderTesting: true, // مركز فحص أكتوبر
       carWash: true,
       convenienceStore: true,
@@ -257,7 +257,7 @@ const RAW_INITIAL_STATIONS: Station[] = [
     services: {
       cngRefuel: true,
       conversionMaintenance: false,
-      bpOilCenter: true,
+      bpOilCenter: false,
       cylinderTesting: false,
       convenienceStore: true,
     },
@@ -305,7 +305,7 @@ const RAW_INITIAL_STATIONS: Station[] = [
     services: {
       cngRefuel: true,
       conversionMaintenance: true,
-      bpOilCenter: true,
+      bpOilCenter: false,
       cylinderTesting: true, // مركز فحص إسكندرية
       carWash: true,
       convenienceStore: true,
@@ -329,7 +329,7 @@ const RAW_INITIAL_STATIONS: Station[] = [
     services: {
       cngRefuel: true,
       conversionMaintenance: true,
-      bpOilCenter: true,
+      bpOilCenter: false,
       cylinderTesting: false,
       carWash: true,
       convenienceStore: true,
@@ -353,7 +353,7 @@ const RAW_INITIAL_STATIONS: Station[] = [
     services: {
       cngRefuel: true,
       conversionMaintenance: true,
-      bpOilCenter: true,
+      bpOilCenter: false,
       cylinderTesting: true,
       carWash: true,
       convenienceStore: true,
@@ -377,7 +377,7 @@ const RAW_INITIAL_STATIONS: Station[] = [
     services: {
       cngRefuel: true,
       conversionMaintenance: true,
-      bpOilCenter: true,
+      bpOilCenter: false,
       cylinderTesting: true,
       carWash: false,
       convenienceStore: true,
@@ -401,7 +401,7 @@ const RAW_INITIAL_STATIONS: Station[] = [
     services: {
       cngRefuel: true,
       conversionMaintenance: true,
-      bpOilCenter: true,
+      bpOilCenter: false,
       cylinderTesting: false,
       carWash: true,
       convenienceStore: true,
@@ -425,7 +425,7 @@ const RAW_INITIAL_STATIONS: Station[] = [
     services: {
       cngRefuel: true,
       conversionMaintenance: true,
-      bpOilCenter: true,
+      bpOilCenter: false,
       cylinderTesting: true,
       carWash: true,
       convenienceStore: true,
@@ -449,7 +449,7 @@ const RAW_INITIAL_STATIONS: Station[] = [
     services: {
       cngRefuel: true,
       conversionMaintenance: false,
-      bpOilCenter: true,
+      bpOilCenter: false,
       cylinderTesting: false,
       carWash: false,
       convenienceStore: true,
@@ -473,7 +473,7 @@ const RAW_INITIAL_STATIONS: Station[] = [
     services: {
       cngRefuel: true,
       conversionMaintenance: true,
-      bpOilCenter: true,
+      bpOilCenter: false,
       cylinderTesting: true, // مركز فحص الصعيد
       carWash: true,
       convenienceStore: true,

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Station } from '../types/station';
 import { useApp } from '../context/AppContext';
 import { getGoogleMapsNavigationUrl, formatDistance, copyCoordinatesToClipboard, getGoogleMapsViewUrl } from '../utils/geo';
+import { DEFAULT_CARGAS_LOGO } from '../utils/cargasLogo';
 import {
   X,
   Navigation,
@@ -31,14 +32,14 @@ export const StationDetailModal: React.FC<StationDetailModalProps> = ({
   onClose,
   onFocusOnMap,
 }) => {
-  const { settings } = useApp();
+  const { settings, userLocation } = useApp();
   const [copied, setCopied] = useState(false);
 
   if (!station) return null;
 
-  const navUrl = getGoogleMapsNavigationUrl(station.lat, station.lng, station.name);
+  const navUrl = getGoogleMapsNavigationUrl(station.lat, station.lng, station.name, userLocation);
   const viewUrl = getGoogleMapsViewUrl(station.lat, station.lng);
-  const stationLogo = station.logoUrl || settings.defaultStationLogoUrl;
+  const stationLogo = station.logoUrl || settings.defaultStationLogoUrl || DEFAULT_CARGAS_LOGO;
 
   const handleCopy = async () => {
     const success = await copyCoordinatesToClipboard(station.lat, station.lng);
@@ -134,7 +135,18 @@ export const StationDetailModal: React.FC<StationDetailModalProps> = ({
                 }`}
               >
                 <Droplets className="w-4 h-4 text-blue-600 shrink-0" />
-                <span>{settings.bpOilLabel || 'مركز زيوت BP كاسترول'}</span>
+                <span>{settings.bpOilLabel || 'مركز زيوت BP متكامل'}</span>
+              </div>
+
+              <div
+                className={`flex items-center gap-2 p-3 rounded-xl border text-xs font-bold ${
+                  station.services.canopyOilSales
+                    ? 'bg-cyan-50 dark:bg-cyan-950/40 border-cyan-200 dark:border-cyan-800 text-cyan-800 dark:text-cyan-300'
+                    : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 line-through opacity-60'
+                }`}
+              >
+                <Droplets className="w-4 h-4 text-cyan-600 shrink-0" />
+                <span>{settings.canopyOilLabel || 'بيع زيوت أسفل المظلة'}</span>
               </div>
 
               <div
@@ -151,12 +163,21 @@ export const StationDetailModal: React.FC<StationDetailModalProps> = ({
               <div
                 className={`flex items-center gap-2 p-3 rounded-xl border text-xs font-bold ${
                   station.services.cylinderTesting
-                    ? 'bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-300'
+                    ? station.services.cylinderTestingUpcoming
+                      ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300 ring-2 ring-amber-400/50'
+                      : 'bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-300'
                     : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 line-through opacity-60'
                 }`}
               >
                 <ShieldCheck className="w-4 h-4 text-purple-600 shrink-0" />
-                <span>{settings.cylinderLabel || 'فحص واختبار أسطوانات'}</span>
+                <span>
+                  {settings.cylinderLabel || 'فحص أسطوانات'}{' '}
+                  {station.services.cylinderTesting
+                    ? station.services.cylinderTestingUpcoming
+                      ? '(تحت التشغيل - قريباً)'
+                      : '(فعلي متاح)'
+                    : ''}
+                </span>
               </div>
             </div>
           </div>

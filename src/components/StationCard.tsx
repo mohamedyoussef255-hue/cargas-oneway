@@ -2,6 +2,7 @@ import React from 'react';
 import { Station } from '../types/station';
 import { useApp } from '../context/AppContext';
 import { formatDistance, getGoogleMapsNavigationUrl } from '../utils/geo';
+import { DEFAULT_CARGAS_LOGO } from '../utils/cargasLogo';
 import {
   Navigation,
   MapPin,
@@ -29,9 +30,9 @@ export const StationCard: React.FC<StationCardProps> = ({
   onViewDetails,
   isSelected = false,
 }) => {
-  const { settings } = useApp();
-  const navUrl = getGoogleMapsNavigationUrl(station.lat, station.lng, station.name);
-  const stationLogo = station.logoUrl || settings.defaultStationLogoUrl;
+  const { settings, userLocation } = useApp();
+  const navUrl = getGoogleMapsNavigationUrl(station.lat, station.lng, station.name, userLocation);
+  const stationLogo = station.logoUrl || settings.defaultStationLogoUrl || DEFAULT_CARGAS_LOGO;
 
   return (
     <div
@@ -100,7 +101,13 @@ export const StationCard: React.FC<StationCardProps> = ({
         {station.services.bpOilCenter && (
           <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-lg border border-blue-200 dark:border-blue-800">
             <Droplets className="w-3 h-3 text-blue-600" />
-            {settings.bpOilLabel || 'زيوت BP'}
+            {settings.bpOilLabel || 'مركز زيوت BP متكامل'}
+          </span>
+        )}
+        {station.services.canopyOilSales && (
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-cyan-50 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 px-2 py-0.5 rounded-lg border border-cyan-200 dark:border-cyan-800">
+            <Droplets className="w-3 h-3 text-cyan-600" />
+            {settings.canopyOilLabel || 'بيع زيوت أسفل المظلة'}
           </span>
         )}
         {station.services.conversionMaintenance && (
@@ -110,10 +117,17 @@ export const StationCard: React.FC<StationCardProps> = ({
           </span>
         )}
         {station.services.cylinderTesting && (
-          <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-lg border border-purple-200 dark:border-purple-800">
-            <ShieldCheck className="w-3 h-3 text-purple-600" />
-            {settings.cylinderLabel || 'فحص أسطوانات'}
-          </span>
+          station.services.cylinderTestingUpcoming ? (
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-lg border border-amber-300 dark:border-amber-800 animate-pulse">
+              <ShieldCheck className="w-3 h-3 text-amber-600" />
+              <span>فحص أسطوانات (قريباً)</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-lg border border-purple-200 dark:border-purple-800">
+              <ShieldCheck className="w-3 h-3 text-purple-600" />
+              <span>{settings.cylinderLabel || 'فحص أسطوانات'} (فعلي)</span>
+            </span>
+          )
         )}
       </div>
 

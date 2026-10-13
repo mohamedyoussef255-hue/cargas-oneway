@@ -47,7 +47,8 @@ export const FilterBar: React.FC = () => {
   }[] = [
     { id: 'all', label: 'جميع المحطات', icon: <Compass className="w-3.5 h-3.5" />, color: 'emerald' },
     { id: 'cngRefuel', label: settings.cngLabel || 'تموين غاز', icon: <Flame className="w-3.5 h-3.5" />, color: 'emerald' },
-    { id: 'bpOilCenter', label: settings.bpOilLabel || 'زيوت BP', icon: <Droplets className="w-3.5 h-3.5" />, color: 'blue' },
+    { id: 'bpOilCenter', label: settings.bpOilLabel || 'مركز زيوت BP متكامل', icon: <Droplets className="w-3.5 h-3.5" />, color: 'blue' },
+    { id: 'canopyOilSales', label: settings.canopyOilLabel || 'بيع زيوت أسفل المظلة', icon: <Droplets className="w-3.5 h-3.5" />, color: 'cyan' },
     { id: 'conversionMaintenance', label: settings.maintenanceLabel || 'صيانة وتحويل', icon: <Wrench className="w-3.5 h-3.5" />, color: 'amber' },
     { id: 'cylinderTesting', label: settings.cylinderLabel || 'فحص أسطوانات', icon: <ShieldCheck className="w-3.5 h-3.5" />, color: 'purple' },
   ];

@@ -4,6 +4,7 @@ import {
   ExtractedCenter,
   CenterCategory,
   parseExcelSheet,
+  parseWordDocument,
   parsePdfOrTextContent,
   applyImportedCentersToStations,
   generateSampleExcelTemplate,
@@ -79,16 +80,22 @@ export const AdminExcelImportTab: React.FC<AdminExcelImportTabProps> = ({
       const fileName = file.name.toLowerCase();
       let centers: ExtractedCenter[] = [];
 
-      if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) {
+      if (fileName.endsWith('.docx')) {
+        const buffer = await file.arrayBuffer();
+        centers = await parseWordDocument(buffer, selectedCategory, stations);
+      } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) {
         const buffer = await file.arrayBuffer();
         centers = parseExcelSheet(buffer, selectedCategory, stations);
       } else if (fileName.endsWith('.pdf') || fileName.endsWith('.txt')) {
         const text = await file.text();
         centers = parsePdfOrTextContent(text, selectedCategory, stations);
       } else {
-        // محاولة القراءة كإكسيل
         const buffer = await file.arrayBuffer();
-        centers = parseExcelSheet(buffer, selectedCategory, stations);
+        try {
+          centers = await parseWordDocument(buffer, selectedCategory, stations);
+        } catch {
+          centers = parseExcelSheet(buffer, selectedCategory, stations);
+        }
       }
 
       // تطبيق خيار التسجيل العام الافتراضي
@@ -176,6 +183,20 @@ export const AdminExcelImportTab: React.FC<AdminExcelImportTabProps> = ({
     );
   };
 
+  // تغيير نوع النشاط لصف فردي
+  const handleChangeRowCategory = (centerId: string, newCat: ExtractedCenter['category']) => {
+    setExtractedCenters((prev) =>
+      prev.map((c) => (c.id === centerId ? { ...c, category: newCat } : c))
+    );
+  };
+
+  // تبديل حالة الفحص قريباً vs فعلي
+  const handleToggleRowUpcoming = (centerId: string) => {
+    setExtractedCenters((prev) =>
+      prev.map((c) => (c.id === centerId ? { ...c, isUpcoming: !c.isUpcoming } : c))
+    );
+  };
+
   // حذف صف فردي من المعاينة
   const handleDeleteRow = (centerId: string) => {
     setExtractedCenters((prev) => prev.filter((c) => c.id !== centerId));
@@ -191,12 +212,12 @@ export const AdminExcelImportTab: React.FC<AdminExcelImportTabProps> = ({
 
     setImportStatus({
       success: true,
-      message: `تم تثبيت وحفظ ${extractedCenters.length} مركز بنجاح في المنظومة!`,
+      message: `تم التوافق مع محطات الخريطة وتثبيت وحفظ ${extractedCenters.length} مركز بنجاح (تم تحديث وتفعيل الأنشطة لـ ${result.mergedCount} محطة، وتسجيل ${result.newCount} مركز جديد)!`,
       newCount: result.newCount,
       mergedCount: result.mergedCount,
     });
 
-    showToast(`تم تسجيل ${result.newCount} مركز منفصل جديد، ودمج ${result.mergedCount} مركز ضمن المحطات القائمة!`);
+    showToast(`تم التوافق مع محطات الخريطة بنجاح: إضافة الأنشطة لـ ${result.mergedCount} محطة، وإضافة ${result.newCount} مركز جديد!`);
     setExtractedCenters([]);
   };
 
@@ -212,26 +233,26 @@ export const AdminExcelImportTab: React.FC<AdminExcelImportTabProps> = ({
   });
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto text-right" dir="rtl">
-      {/* الترويسة والتعريف */}
-      <div className="bg-gradient-to-l from-slate-900 via-slate-800 to-emerald-950 text-white p-5 rounded-2xl shadow-md border border-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div className="space-y-6 w-full text-right" dir="rtl">
+      {/* الترويسة والتعريف الموسعة */}
+      <div className="bg-gradient-to-l from-slate-900 via-slate-800 to-emerald-950 text-white p-6 rounded-3xl shadow-lg border border-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl">
-              <FileSpreadsheet className="w-5 h-5" />
+          <div className="flex items-center gap-2.5">
+            <span className="p-2.5 bg-emerald-500/20 text-emerald-400 rounded-2xl">
+              <FileSpreadsheet className="w-6 h-6" />
             </span>
-            <h3 className="text-lg font-black tracking-tight">
-              استيراد مراكز التحويل والزيوت والفحص (Excel / PDF)
+            <h3 className="text-xl font-black tracking-tight">
+              استيراد وتوثيق مراكز الفحص والتحويل والزيوت (Word / Excel / PDF)
             </h3>
           </div>
-          <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
-            ارفع شيت إكسيل أو ملف PDF يحتوي على أسماء وعناوين المراكز؛ يتم التعرف على المواقع الجغرافية تلقائياً وتسجيل كل مركز إما <strong>ضمن نطاق محطة قائمة</strong> أو <strong>كمركز منفصل تماماً</strong>.
+          <p className="text-xs sm:text-sm text-slate-300 mt-2 max-w-3xl leading-relaxed">
+            ارفع مستندات <strong>Word (.docx)</strong>، شيتات <strong>Excel (.xlsx)</strong>، أو ملفات <strong>PDF</strong>. يتم التعرف على المواقع الجغرافية تلقائياً وإتاحة تسجيل المركز إما <strong>ضمن نطاق محطة قائمة</strong> أو <strong>كمركز منفصل تماماً</strong>، مع التفرقة بين مراكز الزيوت المتكاملة ومنافذ المظلة، وحالة الفحص (فعلي أو قريباً).
           </p>
         </div>
 
         <button
           onClick={generateSampleExcelTemplate}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition shadow shrink-0"
+          className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-2xl transition shadow-md shrink-0"
           title="تحميل شيت إكسيل يحتوي على أمثلة للأعمدة والبيانات"
         >
           <Download className="w-4 h-4" />
@@ -242,84 +263,85 @@ export const AdminExcelImportTab: React.FC<AdminExcelImportTabProps> = ({
       {/* 1. اختيار نوع النشاط وخيار التسجيل الافتراضي */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* نوع النشاط في الملف */}
-        <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-2">
-          <label className="text-xs font-bold text-slate-900 dark:text-white block">
+        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-2.5">
+          <label className="text-xs font-black text-slate-900 dark:text-white block">
             1. نوع النشاط المستهدف من الملف:
           </label>
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value as CenterCategory)}
-            className="w-full py-2 px-3 text-xs bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl border border-slate-200 dark:border-slate-600 font-bold focus:outline-none"
+            className="w-full py-2.5 px-3.5 text-xs bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl border border-slate-200 dark:border-slate-600 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
           >
-            <option value="auto">⚡ تحديد ذكي تلقائي من نصوص الشيت</option>
+            <option value="auto">⚡ تحديد ذكي تلقائي (من نصوص الوورد أو الإكسيل)</option>
             <option value="conversionMaintenance">🔧 مراكز تحويل وصيانة السيارات</option>
-            <option value="bpOilCenter">💧 مراكز زيوت BP كاسترول</option>
-            <option value="cylinderTesting">🛡️ مراكز فحص واختبار الأسطوانات</option>
+            <option value="bpOilCenter">🛢️ مركز زيوت BP متكامل (خدمة وتغيير زيوت وفلاتر)</option>
+            <option value="canopyOilSales">🧴 بيع زيوت أسفل المظلة (عبوات وستاند عند الطلمبات)</option>
+            <option value="cylinderTesting">🛡️ مراكز فحص واختبار الأسطوانات (فعلي وقريباً)</option>
           </select>
-          <span className="text-[10px] text-slate-400 block">
-            يمكنك تركها على التحديد التلقائي ليتعرف النظام على النشاط من الكلمات
+          <span className="text-[11px] text-slate-500 block leading-relaxed">
+            يدعم التفرقة التلقائية بين مركز الزيوت المتكامل ومنافذ البيع أسفل المظلة، وحالة الفحص قريباً.
           </span>
         </div>
 
         {/* خيار التسجيل العام الافتراضي */}
-        <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-2">
-          <label className="text-xs font-bold text-slate-900 dark:text-white block">
+        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-2.5">
+          <label className="text-xs font-black text-slate-900 dark:text-white block">
             2. طريقة التسجيل الافتراضية:
           </label>
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => handleGlobalActionChange('standalone')}
-              className={`flex items-center justify-center gap-1.5 p-2 rounded-xl text-xs font-bold border transition ${
+              className={`flex items-center justify-center gap-2 p-2.5 rounded-xl text-xs font-bold border transition ${
                 globalActionType === 'standalone'
-                  ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
-                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                  ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 shadow-xs'
+                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
               }`}
             >
-              <Building className="w-3.5 h-3.5" />
+              <Building className="w-4 h-4" />
               <span>كمركز منفصل تماماً</span>
             </button>
 
             <button
               onClick={() => handleGlobalActionChange('merge')}
-              className={`flex items-center justify-center gap-1.5 p-2 rounded-xl text-xs font-bold border transition ${
+              className={`flex items-center justify-center gap-2 p-2.5 rounded-xl text-xs font-bold border transition ${
                 globalActionType === 'merge'
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 shadow-xs'
+                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
               }`}
             >
-              <GitMerge className="w-3.5 h-3.5" />
+              <GitMerge className="w-4 h-4" />
               <span>دمج ضمن محطة قائمة</span>
             </button>
           </div>
-          <span className="text-[10px] text-slate-400 block">
-            يمكنك تخصيص كل صف بمفرده لاحقاً من جدول المعاينة قبل الحفظ
+          <span className="text-[11px] text-slate-500 block">
+            يمكنك تخصيص كل مركز بمفرده لاحقاً من جدول المعاينة قبل الحفظ النهائي.
           </span>
         </div>
       </div>
 
-      {/* 2. منطقة رفع الملف (Drag & Drop) */}
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border-2 border-dashed border-emerald-500/40 dark:border-emerald-600/30 text-center space-y-3">
-        <div className="w-14 h-14 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center mx-auto shadow-sm">
-          <FileSpreadsheet className="w-7 h-7" />
+      {/* 2. منطقة رفع الملف الموسعة والمريحة (Drag & Drop) */}
+      <div className="bg-white dark:bg-slate-800 p-8 sm:p-12 rounded-3xl border-2 border-dashed border-emerald-500/50 dark:border-emerald-600/40 text-center space-y-4 shadow-sm hover:border-emerald-500 transition">
+        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center mx-auto shadow-md">
+          <FileSpreadsheet className="w-8 h-8 sm:w-10 sm:h-10" />
         </div>
 
         <div>
-          <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-            اختر ملف إكسيل (.xlsx, .xls, .csv) أو ملف PDF (.pdf)
+          <h4 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+            اختر أو اسحب ملف وورد (.docx)، إكسيل (.xlsx, .xls, .csv)، أو PDF (.pdf)
           </h4>
-          <p className="text-xs text-slate-500 mt-0.5">
-            يقبل جداول الإكسيل الرسمية، كشوف المحطات، أو كشوف مراكز الغاز المطبوعة بصيغة PDF
+          <p className="text-xs sm:text-sm text-slate-500 max-w-xl mx-auto mt-1 leading-relaxed">
+            يدعم قراءة مستندات Word الرسمية، جداول الإكسيل، كشوف محطات ومراكز كارجاس، مع استخراج الإحداثيات والوصول للموقع فورياً.
           </p>
         </div>
 
-        <div className="flex items-center justify-center gap-3 pt-1">
-          <label className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black cursor-pointer transition shadow-md">
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+          <label className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs sm:text-sm font-black cursor-pointer transition shadow-lg shadow-emerald-600/25 active:scale-95">
             <Upload className="w-4 h-4" />
-            <span>اختر الملف من جهازك</span>
+            <span>اختر ملف من الكمبيوتر (Word / Excel / PDF)</span>
             <input
               ref={fileInputRef}
               type="file"
-              accept=".xlsx,.xls,.csv,.pdf,.txt"
+              accept=".docx,.doc,.xlsx,.xls,.csv,.pdf,.txt"
               onChange={handleFileUpload}
               className="hidden"
             />
@@ -327,7 +349,7 @@ export const AdminExcelImportTab: React.FC<AdminExcelImportTabProps> = ({
 
           <button
             onClick={() => setShowPasteBox(!showPasteBox)}
-            className="flex items-center gap-1.5 px-4 py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl transition"
+            className="flex items-center gap-2 px-5 py-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs sm:text-sm font-bold rounded-2xl transition"
           >
             <FileText className="w-4 h-4" />
             <span>{showPasteBox ? 'إخفاء صندوق اللصق' : 'أو لصق النصوص مباشرة'}</span>
@@ -445,24 +467,32 @@ export const AdminExcelImportTab: React.FC<AdminExcelImportTabProps> = ({
                       <span className="text-[10px] text-slate-400 block">{center.governorate}</span>
                     </td>
 
-                    {/* النشاط */}
+                    {/* النشاط مع إمكانية التعديل السريع والتفرقة */}
                     <td className="p-3">
-                      {center.category === 'cylinderTesting' ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-lg border border-purple-200 dark:border-purple-800">
-                          <ShieldCheck className="w-3 h-3 text-purple-600" />
-                          فحص أسطوانات
-                        </span>
-                      ) : center.category === 'bpOilCenter' ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-lg border border-blue-200 dark:border-blue-800">
-                          <Droplets className="w-3 h-3 text-blue-600" />
-                          زيوت BP
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                          <Flame className="w-3 h-3 text-emerald-600" />
-                          تحويل وصيانة
-                        </span>
-                      )}
+                      <div className="flex flex-col gap-1.5 min-w-[150px]">
+                        <select
+                          value={center.category}
+                          onChange={(e) => handleChangeRowCategory(center.id, e.target.value as any)}
+                          className="text-[11px] font-bold py-1 px-1.5 rounded-lg bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-800 dark:text-slate-200 focus:outline-none"
+                        >
+                          <option value="conversionMaintenance">🔧 تحويل وصيانة</option>
+                          <option value="bpOilCenter">🛢️ مركز زيوت BP متكامل</option>
+                          <option value="canopyOilSales">🧴 بيع زيوت أسفل المظلة</option>
+                          <option value="cylinderTesting">🛡️ فحص واختبار أسطوانات</option>
+                        </select>
+
+                        {center.category === 'cylinderTesting' && (
+                          <label className="flex items-center gap-1.5 cursor-pointer text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 p-1 rounded border border-amber-200 dark:border-amber-800">
+                            <input
+                              type="checkbox"
+                              checked={!!center.isUpcoming}
+                              onChange={() => handleToggleRowUpcoming(center.id)}
+                              className="w-3.5 h-3.5 accent-amber-600 rounded"
+                            />
+                            <span>تحت التشغيل ("قريباً")</span>
+                          </label>
+                        )}
+                      </div>
                     </td>
 
                     {/* الإحداثيات */}
@@ -499,18 +529,32 @@ export const AdminExcelImportTab: React.FC<AdminExcelImportTabProps> = ({
 
                         {/* قائمة المحطات القريبة إذا اختار دمج */}
                         {center.actionType === 'merge' && (
-                          <select
-                            value={center.matchedStationId || ''}
-                            onChange={(e) => handleSelectMatchedStation(center.id, e.target.value)}
-                            className="text-[10px] p-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-200 max-w-[160px]"
-                          >
-                            <option value="">اختر المحطة للدمج...</option>
-                            {stations.map((st) => (
-                              <option key={st.id} value={st.id}>
-                                {st.name} ({st.governorate})
-                              </option>
-                            ))}
-                          </select>
+                          <div className="flex flex-col gap-1">
+                            {center.matchedStationName && (
+                              <div className="text-[10px] bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2 py-1 rounded-md font-bold flex items-center gap-1">
+                                <Check className="w-3 h-3 text-emerald-600 shrink-0" />
+                                <span className="truncate">متوافق مع: {center.matchedStationName}</span>
+                              </div>
+                            )}
+                            <div className="text-[9px] text-slate-500 dark:text-slate-400 font-bold">
+                              {center.category === 'conversionMaintenance' && '➕ إضافة نشاط: تحويل وصيانة'}
+                              {center.category === 'bpOilCenter' && '➕ إضافة نشاط: مركز زيوت BP'}
+                              {center.category === 'canopyOilSales' && '➕ إضافة نشاط: بيع زيوت أسفل المظلة'}
+                              {center.category === 'cylinderTesting' && `➕ إضافة نشاط: فحص أسطوانات (${center.isUpcoming ? 'قريباً' : 'فعلي'})`}
+                            </div>
+                            <select
+                              value={center.matchedStationId || ''}
+                              onChange={(e) => handleSelectMatchedStation(center.id, e.target.value)}
+                              className="text-[10px] p-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-200 max-w-[190px]"
+                            >
+                              <option value="">اختر محطة أخرى للدمج...</option>
+                              {stations.map((st) => (
+                                <option key={st.id} value={st.id}>
+                                  {st.name} ({st.governorate})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         )}
                       </div>
                     </td>

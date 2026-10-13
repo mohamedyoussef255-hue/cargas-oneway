@@ -484,9 +484,9 @@ export const AdminModal: React.FC = () => {
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/75 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/75 backdrop-blur-sm animate-fade-in">
       <div
-        className="relative w-full max-w-5xl bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col max-h-[92vh] overflow-hidden text-right"
+        className="relative w-full max-w-[98vw] 2xl:max-w-[1550px] bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col h-[95vh] max-h-[96vh] overflow-hidden text-right"
         dir="rtl"
       >
         {/* إشعار الحفظ العام العائم */}
@@ -550,103 +550,125 @@ export const AdminModal: React.FC = () => {
           </div>
         </div>
 
-        {/* أشرطة التبويب الرئيسية */}
-        <div className="bg-slate-100 dark:bg-slate-900/50 p-2 border-b border-slate-200 dark:border-slate-700 flex gap-2 overflow-x-auto no-scrollbar">
-          <button
-            onClick={() => setActiveTab('stations_crud')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm whitespace-nowrap transition ${
-              activeTab === 'stations_crud'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800'
-            }`}
-          >
-            <FileCode className="w-4 h-4" />
-            <span>إدارة المحطات ({stations.length})</span>
-          </button>
+        {/* أشرطة التبويب الرئيسية بتصميم فائق البروز والثبات لا يختفي أبداً فوق أي محتوى */}
+        <div className="bg-white dark:bg-slate-900 border-b-2 border-slate-200 dark:border-slate-700 px-3 py-2.5 shrink-0 sticky top-0 z-40 shadow-sm">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar whitespace-nowrap">
+            {/* 1. إدارة المحطات */}
+            <button
+              onClick={() => setActiveTab('stations_crud')}
+              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl font-black text-xs sm:text-sm transition-all duration-200 cursor-pointer shrink-0 ${
+                activeTab === 'stations_crud'
+                  ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-400 scale-[1.02]'
+                  : 'text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700'
+              }`}
+            >
+              <span className={`p-1 rounded-lg ${activeTab === 'stations_crud' ? 'bg-white/20' : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'}`}>
+                <FileCode className="w-4 h-4" />
+              </span>
+              <span>إدارة المحطات</span>
+              <span className={`px-2 py-0.5 rounded-full text-[11px] font-mono ${activeTab === 'stations_crud' ? 'bg-black/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
+                {stations.length}
+              </span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('excel_import')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm whitespace-nowrap transition ${
-              activeTab === 'excel_import'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800'
-            }`}
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            <span>استيراد مراكز التحويل والزيوت والفحص (Excel / PDF)</span>
-          </button>
+            {/* 2. استيراد الملفات (Excel / Word / PDF) */}
+            <button
+              onClick={() => setActiveTab('excel_import')}
+              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl font-black text-xs sm:text-sm transition-all duration-200 cursor-pointer shrink-0 ${
+                activeTab === 'excel_import'
+                  ? 'bg-emerald-700 text-white shadow-lg shadow-emerald-700/30 ring-2 ring-emerald-400 scale-[1.02]'
+                  : 'text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700/80 border border-emerald-300 dark:border-emerald-700'
+              }`}
+            >
+              <span className={`p-1 rounded-lg ${activeTab === 'excel_import' ? 'bg-white/20' : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'}`}>
+                <FileSpreadsheet className="w-4 h-4" />
+              </span>
+              <span>استيراد الملفات (Word / Excel / PDF)</span>
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded-md font-bold">
+                توافق تلقائي
+              </span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('theme_colors')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm whitespace-nowrap transition ${
-              activeTab === 'theme_colors'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800'
-            }`}
-          >
-            <Palette className="w-4 h-4" />
-            <span>بنتونة الألوان والنظام النهاري والليلي</span>
-          </button>
+            {/* 3. بنتونة الألوان والنظام النهاري والليلي */}
+            <button
+              onClick={() => setActiveTab('theme_colors')}
+              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl font-black text-xs sm:text-sm transition-all duration-200 cursor-pointer shrink-0 ${
+                activeTab === 'theme_colors'
+                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30 ring-2 ring-purple-400 scale-[1.02]'
+                  : 'text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-purple-50 dark:hover:bg-slate-700/80 border border-purple-300 dark:border-purple-700'
+              }`}
+            >
+              <span className={`p-1 rounded-lg ${activeTab === 'theme_colors' ? 'bg-white/20' : 'bg-purple-500/20 text-purple-600 dark:text-purple-400'}`}>
+                <Palette className="w-4 h-4" />
+              </span>
+              <span>بنتونة الألوان والنهاري/الليلي</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('kml_upload')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm whitespace-nowrap transition ${
-              activeTab === 'kml_upload'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800'
-            }`}
-          >
-            <Upload className="w-4 h-4" />
-            <span>استيراد ملفات KMZ</span>
-          </button>
+            {/* 4. استيراد ملفات KMZ */}
+            <button
+              onClick={() => setActiveTab('kml_upload')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs sm:text-sm transition cursor-pointer shrink-0 ${
+                activeTab === 'kml_upload'
+                  ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-400'
+                  : 'text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+              }`}
+            >
+              <Upload className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+              <span>استيراد KMZ</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('station_logos')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm whitespace-nowrap transition ${
-              activeTab === 'station_logos'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800'
-            }`}
-          >
-            <ImageIcon className="w-4 h-4" />
-            <span>لوجو المحطات والخريطة</span>
-          </button>
+            {/* 5. لوجو المحطات */}
+            <button
+              onClick={() => setActiveTab('station_logos')}
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl font-bold text-xs transition cursor-pointer shrink-0 ${
+                activeTab === 'station_logos'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+              }`}
+            >
+              <ImageIcon className="w-3.5 h-3.5 shrink-0" />
+              <span>لوجو المحطات</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('text_control')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm whitespace-nowrap transition ${
-              activeTab === 'text_control'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800'
-            }`}
-          >
-            <Type className="w-4 h-4" />
-            <span>التحكم في النصوص والعناوين</span>
-          </button>
+            {/* 6. التحكم في النصوص */}
+            <button
+              onClick={() => setActiveTab('text_control')}
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl font-bold text-xs transition cursor-pointer shrink-0 ${
+                activeTab === 'text_control'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+              }`}
+            >
+              <Type className="w-3.5 h-3.5 shrink-0" />
+              <span>التحكم بالنصوص</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('branding_settings')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm whitespace-nowrap transition ${
-              activeTab === 'branding_settings'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800'
-            }`}
-          >
-            <Lock className="w-4 h-4" />
-            <span>شعار التطبيق وكلمة السر</span>
-          </button>
+            {/* 7. الشعار وكلمة السر */}
+            <button
+              onClick={() => setActiveTab('branding_settings')}
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl font-bold text-xs transition cursor-pointer shrink-0 ${
+                activeTab === 'branding_settings'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+              }`}
+            >
+              <Lock className="w-3.5 h-3.5 shrink-0" />
+              <span>كلمة السر</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('visibility_control')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm whitespace-nowrap transition ${
-              activeTab === 'visibility_control'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800'
-            }`}
-          >
-            <Eye className="w-4 h-4" />
-            <span>التحكم في الأيقونات والظهور</span>
-          </button>
+            {/* 8. التحكم في الظهور */}
+            <button
+              onClick={() => setActiveTab('visibility_control')}
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl font-bold text-xs transition cursor-pointer shrink-0 ${
+                activeTab === 'visibility_control'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+              }`}
+            >
+              <Eye className="w-3.5 h-3.5 shrink-0" />
+              <span>الظهور والإخفاء</span>
+            </button>
+          </div>
         </div>
 
         {/* المحتوى الداخلي للتبويبات */}
@@ -676,6 +698,65 @@ export const AdminModal: React.FC = () => {
           {/* ===================== التبويب 1: إدارة المحطات (CRUD وحذف المحطات) ===================== */}
           {activeTab === 'stations_crud' && (
             <div className="space-y-4">
+              {/* بطاقات إحصائيات سريعة للأنشطة والخدمات */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+                <div className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                  <span className="text-[10px] text-slate-400 block font-medium">إجمالي المحطات</span>
+                  <span className="text-base font-black text-slate-900 dark:text-white">{stations.length}</span>
+                </div>
+                <div className="p-2.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
+                  <span className="text-[10px] text-emerald-600 block font-medium">تموين غاز</span>
+                  <span className="text-base font-black text-emerald-700 dark:text-emerald-300">{stations.filter(s => s.services.cngRefuel).length}</span>
+                </div>
+                <div className="p-2.5 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800">
+                  <span className="text-[10px] text-blue-600 block font-medium">مراكز زيوت BP</span>
+                  <span className="text-base font-black text-blue-700 dark:text-blue-300">{stations.filter(s => s.services.bpOilCenter).length}</span>
+                </div>
+                <div className="p-2.5 rounded-2xl bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-200 dark:border-cyan-800">
+                  <span className="text-[10px] text-cyan-600 block font-medium">زيوت أسفل المظلة</span>
+                  <span className="text-base font-black text-cyan-700 dark:text-cyan-300">{stations.filter(s => s.services.canopyOilSales).length}</span>
+                </div>
+                <div className="p-2.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800">
+                  <span className="text-[10px] text-amber-600 block font-medium">تحويل وصيانة</span>
+                  <span className="text-base font-black text-amber-700 dark:text-amber-300">{stations.filter(s => s.services.conversionMaintenance).length}</span>
+                </div>
+                <div className="p-2.5 rounded-2xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800">
+                  <span className="text-[10px] text-purple-600 block font-medium">فحص أسطوانات</span>
+                  <span className="text-base font-black text-purple-700 dark:text-purple-300">
+                    {stations.filter(s => s.services.cylinderTesting && !s.services.cylinderTestingUpcoming).length} فعلي
+                    <span className="text-xs font-normal text-amber-600 mr-1">({stations.filter(s => s.services.cylinderTestingUpcoming).length} قريباً)</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* شريط الإجراءات والانتقال السريع البارز جداً أعلى جدول المحطات لضمان عدم اختفاء أي أيقونة */}
+              <div className="flex flex-wrap items-center justify-between gap-2.5 p-3 rounded-2xl bg-slate-100 dark:bg-slate-800/90 border-2 border-emerald-500/30 dark:border-emerald-500/20 shadow-xs">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-black text-slate-800 dark:text-slate-200">الانتقال السريع للتبويبات:</span>
+                  <button
+                    onClick={() => setActiveTab('excel_import')}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs shadow-sm transition active:scale-95 cursor-pointer"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    <span>استيراد الملفات (Word / Excel / PDF)</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('theme_colors')}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-black text-xs shadow-sm transition active:scale-95 cursor-pointer"
+                  >
+                    <Palette className="w-3.5 h-3.5" />
+                    <span>بنتونة الألوان والوضع الليلي</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('kml_upload')}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs shadow-sm transition active:scale-95 cursor-pointer"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>رفع ملف KMZ</span>
+                  </button>
+                </div>
+              </div>
+
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                 <div className="relative flex-1 max-w-md">
                   <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -692,10 +773,10 @@ export const AdminModal: React.FC = () => {
                   <button
                     onClick={handleApplyCargasRules}
                     className="flex items-center gap-1.5 px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs shadow transition shrink-0"
-                    title="توحيد جميع المحطات لتبدأ بـ كارجاس، إزالة الترقيم 1 و 2، وتفعيل تموين الغاز والزيوت"
+                    title="توحيد جميع المحطات لتبدأ بـ كارجاس، إزالة الترقيم 1 و 2، وجعل المحطات تموين فقط"
                   >
                     <Flame className="w-4 h-4" />
-                    <span>توحيد كارجاس والزيوت والغاز</span>
+                    <span>توحيد شبكة كارجاس (تموين فقط وإلغاء التكرار)</span>
                   </button>
 
                   <button
@@ -719,9 +800,9 @@ export const AdminModal: React.FC = () => {
 
               {/* جدول المحطات مع زر الحذف والإلغاء المباشر */}
               <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto max-h-[500px]">
                   <table className="w-full text-right text-xs">
-                    <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
+                    <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10">
                       <tr>
                         <th className="p-3">اللوجو</th>
                         <th className="p-3">اسم المحطة</th>
@@ -770,15 +851,26 @@ export const AdminModal: React.FC = () => {
                                     {settings.bpOilLabel || 'BP زيوت'}
                                   </span>
                                 )}
+                                {st.services.canopyOilSales && (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] bg-cyan-100 text-cyan-800 font-bold">
+                                    {settings.canopyOilLabel || 'زيوت مظلة'}
+                                  </span>
+                                )}
                                 {st.services.conversionMaintenance && (
                                   <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-100 text-amber-800 font-bold">
                                     {settings.maintenanceLabel || 'صيانة'}
                                   </span>
                                 )}
                                 {st.services.cylinderTesting && (
-                                  <span className="px-1.5 py-0.5 rounded text-[10px] bg-purple-100 text-purple-800 font-bold">
-                                    {settings.cylinderLabel || 'فحص'}
-                                  </span>
+                                  st.services.cylinderTestingUpcoming ? (
+                                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-100 text-amber-800 font-bold border border-amber-300 animate-pulse">
+                                      فحص (قريباً)
+                                    </span>
+                                  ) : (
+                                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-purple-100 text-purple-800 font-bold">
+                                      {settings.cylinderLabel || 'فحص'} (فعلي)
+                                    </span>
+                                  )
                                 )}
                               </div>
                             </td>
@@ -820,8 +912,8 @@ export const AdminModal: React.FC = () => {
 
           {/* ===================== التبويب 2: استيراد ملفات KMZ ===================== */}
           {activeTab === 'kml_upload' && (
-            <div className="space-y-6 max-w-3xl mx-auto">
-              <div className="p-6 bg-slate-50 dark:bg-slate-700/30 border-2 border-dashed border-emerald-500/40 rounded-3xl text-center space-y-4">
+            <div className="space-y-6 max-w-5xl w-full mx-auto">
+              <div className="p-8 sm:p-12 bg-slate-50 dark:bg-slate-700/30 border-2 border-dashed border-emerald-500/50 rounded-3xl text-center space-y-5">
                 <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center mx-auto">
                   <Upload className="w-8 h-8" />
                 </div>
@@ -2089,7 +2181,22 @@ export const AdminModal: React.FC = () => {
                         }
                         className="w-4 h-4 accent-blue-600 rounded"
                       />
-                      <span>{settings.bpOilLabel || 'مركز زيوت BP'}</span>
+                      <span>{settings.bpOilLabel || 'مركز زيوت BP متكامل'}</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer font-semibold text-cyan-700 dark:text-cyan-300">
+                      <input
+                        type="checkbox"
+                        checked={formData.services.canopyOilSales || false}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            services: { ...formData.services, canopyOilSales: e.target.checked },
+                          })
+                        }
+                        className="w-4 h-4 accent-cyan-600 rounded"
+                      />
+                      <span>{settings.canopyOilLabel || 'بيع زيوت أسفل المظلة'}</span>
                     </label>
 
                     <label className="flex items-center gap-2 cursor-pointer font-semibold text-amber-700 dark:text-amber-300">
@@ -2107,7 +2214,7 @@ export const AdminModal: React.FC = () => {
                       <span>{settings.maintenanceLabel || 'صيانة وتحويل'}</span>
                     </label>
 
-                    <label className="flex items-center gap-2 cursor-pointer font-semibold text-purple-700 dark:text-purple-300">
+                    <label className="flex items-center gap-2 cursor-pointer font-semibold text-purple-700 dark:text-purple-300 col-span-2">
                       <input
                         type="checkbox"
                         checked={formData.services.cylinderTesting}
@@ -2122,6 +2229,48 @@ export const AdminModal: React.FC = () => {
                       <span>{settings.cylinderLabel || 'فحص أسطوانات'}</span>
                     </label>
                   </div>
+
+                  {/* خيار حالة فحص الأسطوانات: فعلي أو تحت التشغيل (قريباً) */}
+                  {formData.services.cylinderTesting && (
+                    <div className="p-3 bg-purple-50 dark:bg-purple-950/40 rounded-xl border border-purple-200 dark:border-purple-800 space-y-1.5 mt-2">
+                      <span className="text-[11px] font-bold text-purple-900 dark:text-purple-200 block">
+                        حالة مركز فحص واختبار الأسطوانات:
+                      </span>
+                      <div className="flex items-center gap-4 text-xs font-bold">
+                        <label className="flex items-center gap-1.5 cursor-pointer text-purple-800 dark:text-purple-300">
+                          <input
+                            type="radio"
+                            name="cylinderUpcomingForm"
+                            checked={!formData.services.cylinderTestingUpcoming}
+                            onChange={() =>
+                              setFormData({
+                                ...formData,
+                                services: { ...formData.services, cylinderTestingUpcoming: false },
+                              })
+                            }
+                            className="accent-purple-600"
+                          />
+                          <span>فعلي معتمد (شغال الآن)</span>
+                        </label>
+
+                        <label className="flex items-center gap-1.5 cursor-pointer text-amber-700 dark:text-amber-300">
+                          <input
+                            type="radio"
+                            name="cylinderUpcomingForm"
+                            checked={!!formData.services.cylinderTestingUpcoming}
+                            onChange={() =>
+                              setFormData({
+                                ...formData,
+                                services: { ...formData.services, cylinderTestingUpcoming: true },
+                              })
+                            }
+                            className="accent-amber-600"
+                          />
+                          <span>تحت التشغيل (يُكتب عليه "قريباً")</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-200 dark:border-slate-700">

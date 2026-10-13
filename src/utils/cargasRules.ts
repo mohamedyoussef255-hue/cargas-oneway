@@ -1,66 +1,96 @@
 import { Station } from '../types/station';
 
 /**
- * تنقية اسم المحطة وإزالة الأرقام (1، 2، 3، إلخ) وتوحيد البداية بـ "كارجاس "
- * أمثلة:
- * - "مصدق 1" أو "مصدق 2" -> "كارجاس مصدق"
- * - "الماظة 1" أو "ألماظة 2" أو "الماظة 3" -> "كارجاس ألماظة"
- * - "الاستاد الاتعاون 1" أو "الاستاد التعاون" -> "كارجاس الاستاد التعاون"
- * - "عز الدين موبيل" -> "كارجاس عز الدين موبيل"
+ * قائمة الشركات الشريكة التي يتم وضعها في نهاية اسم المحطة
+ * وفق قاعدة المستخدم: "عدم تكرار كلمة كارجاس وجعل كارجاس أول الاسم وفي آخر الاسم أي شركة تانية مثل وطنية موبيل التعاون"
+ */
+const PARTNER_COMPANIES: { pattern: RegExp; canonical: string }[] = [
+  { pattern: /(?:ال)?وطنية|wataniya/i, canonical: 'وطنية' },
+  { pattern: /(?:إكسون|اكسون)?\s*موبيل|mobil/i, canonical: 'موبيل' },
+  { pattern: /(?:ال)?تعاون|coop/i, canonical: 'التعاون' },
+  { pattern: /مصر\s+للبترول|misr(?:\s+petroleum)?/i, canonical: 'مصر للبترول' },
+  { pattern: /شل|shell/i, canonical: 'شل' },
+  { pattern: /طاقة(?:\s+عربية)?|taqa/i, canonical: 'طاقة' },
+  { pattern: /توتال(?:\s+إنرجيز|\s+انرجيز)?|total/i, canonical: 'توتال' },
+  { pattern: /تشيل\s*أوت|تشيل\s*اوت|chillout/i, canonical: 'تشيل أوت' },
+  { pattern: /إمارات\s+مصر|امارات\s+مصر|emarat(?:\s+misr)?/i, canonical: 'إمارات مصر' },
+  { pattern: /أولى|اولى|ola/i, canonical: 'أولى' },
+  { pattern: /أولاد\s+بدوي|بدوي/i, canonical: 'أولاد بدوي' },
+  { pattern: /غازتك|gastec/i, canonical: 'غازتك' },
+  { pattern: /ماستر\s+غاز|master\s*gas/i, canonical: 'ماستر غاز' },
+];
+
+/**
+ * تنقية وتوحيد اسم المحطة بدقة فائقة:
+ * 1. عدم تكرار كلمة كارجاس نهائياً.
+ * 2. جعل كلمة "كارجاس" أول الاسم دائماً.
+ * 3. وضع أي شركة شريكة (مثل وطنية، موبيل، التعاون، شل، طاقة، إلخ) في نهاية الاسم فقط مفصولة بشرطة:
+ *    مثال: "كارجاس مصدق - وطنية" أو "كارجاس الاستاد - التعاون" أو "كارجاس رمسيس - موبيل"
+ * 4. إزالة الترقيم (1، 2، 3) والتكرارات.
  */
 export function normalizeCargasStationName(rawName: string): string {
   if (!rawName) return 'كارجاس رئيسية';
 
-  let cleaned = rawName.trim();
+  let text = rawName.trim();
 
-  // 1. إزالة الأقواس وما بداخلها إن كانت أرقاماً مثل (1) أو (2) أو (#1)
-  cleaned = cleaned.replace(/\s*\([0-9٠-٩#]+\)\s*/g, ' ');
+  // 1. فحص واستخراج الشركة الشريكة إن وُجدت
+  let detectedPartner: string | null = null;
+  for (const partner of PARTNER_COMPANIES) {
+    if (partner.pattern.test(text)) {
+      detectedPartner = partner.canonical;
+      // إزالة اسم الشركة الشريكة من النص مؤقتاً لتنقية اسم المنطقة/الموقع
+      text = text.replace(partner.pattern, ' ');
+      break;
+    }
+  }
 
-  // 2. إزالة البوادئ المتكررة لأسماء الشركات أو كلمة "محطة"
-  cleaned = cleaned
-    .replace(/^(?:محطة|محطه)\s+/gi, '')
-    .replace(/^(?:كارجاس|cargas|كار جاس|غازتك|gastec|ماستر غاز|طاقة)\s*[-–/:]*\s*/gi, '')
-    .replace(/^(?:محطة|محطه)\s+/gi, '')
+  // 2. إزالة كافة تكرارات كلمة "كارجاس" بجميع صورها من أي مكان في النص
+  text = text
+    .replace(/(?:كارجاس|cargas|كار\s*جاس)/gi, ' ')
+    .replace(/^(?:محطة|محطه|فرع|مركز|منفذ|خدمة)\s+/gi, ' ')
+    .replace(/\s+(?:محطة|محطه|فرع)\s+/gi, ' ')
     .trim();
 
-  // 3. إزالة الأرقام والزوائد من نهاية الاسم (مثل: 1، 2، 3، ١، ٢، ٣، #1، فرع 1، محطة 1، و2)
-  // تكرار الحذف للتأكد من إزالة أي ترقيم مركب
-  let prevCleaned = '';
-  while (prevCleaned !== cleaned) {
-    prevCleaned = cleaned;
-    cleaned = cleaned
-      // إزالة أنماط مثل "1 و 2" أو "1 و2" أو "1 & 2"
+  // 3. إزالة الأقواس وما بداخلها إن كانت أرقاماً مثل (1) أو (2) أو (#1)
+  text = text.replace(/\s*\([0-9٠-٩#]+\)\s*/g, ' ');
+
+  // 4. إزالة الأرقام والزوائد من نهاية الاسم (مثل: 1، 2، 3، ١، ٢، ٣، #1، فرع 1، محطة 1، و2)
+  let prevText = '';
+  while (prevText !== text) {
+    prevText = text;
+    text = text
       .replace(/\s*[-–_/#]*\s*(?:[0-9٠-٩]\s*(?:و|&)\s*[0-9٠-٩])\s*$/gi, '')
-      // إزالة "فرع 1" أو "رقم 1" أو "مرحلة 1"
       .replace(/\s*[-–_/#]*\s*(?:فرع|رقم|مرحلة|محطة|نقطة)\s*[0-9٠-٩]+\s*$/gi, '')
-      // إزالة الأرقام المفردة العربية والإنجليزية في نهاية السلسلة: 1, 2, 3... ١, ٢, ٣...
       .replace(/\s*[-–_/#]*\s*[0-9٠-٩]+\s*$/gi, '')
-      // إزالة الحروف الترقيمية المنفردة مثل: - أ، - ب، - A، - B
       .replace(/\s*[-–_/#]+\s*[أ-يa-zA-Z]\s*$/gi, '')
-      // إزالة الشرطات والأقواس العالقة في النهاية
       .replace(/\s*[-–_/#():]+$/g, '')
       .trim();
   }
 
-  // تصحيح الأخطاء الإملائية الشائعة مثل "الاتعاون" -> "التعاون"
-  cleaned = cleaned
-    .replace(/الاتعاون/g, 'التعاون')
-    .replace(/^التعاون\s*-\s*/, '')
+  // 5. تصحيح الأخطاء الإملائية وتنقية الفواصل
+  text = text
+    .replace(/الاتعاون/g, '')
+    .replace(/^[-–_/#\s]+|[-–_/#\s]+$/g, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
 
   // توحيد همزة ألماظة
-  if (cleaned === 'الماظة' || cleaned === 'ألماظه' || cleaned === 'الماظه') {
-    cleaned = 'ألماظة';
+  if (text === 'الماظة' || text === 'ألماظه' || text === 'الماظه') {
+    text = 'ألماظة';
   }
 
-  // إذا أصبح الاسم فارغاً بعد التنظيف
-  if (!cleaned) {
-    cleaned = 'رئيسية';
+  // إذا لم يتبق اسم للموقع بعد التنظيف
+  if (!text) {
+    text = 'الرئيسية';
   }
 
-  // إرجاع الاسم موحداً دائماً يبدأ بـ "كارجاس "
-  return `كارجاس ${cleaned}`;
+  // 6. بناء الاسم النهائي الموحد:
+  // "كارجاس" في البداية حصرياً، تليها المنطقة/الموقع، وفي النهاية فقط تظهر الشركة الشريكة
+  if (detectedPartner) {
+    return `كارجاس ${text} - ${detectedPartner}`;
+  }
+
+  return `كارجاس ${text}`;
 }
 
 /**
@@ -94,10 +124,10 @@ export function applyCargasNetworkRules(stations: Station[]): Station[] {
     const normalizedName = key.split('___')[0];
     const primary = group[0]; // المحطة الأساسية
 
-    // دمج الخدمات من كافة المحطات المكررة، مع التأكيد الصارم على: جميع المحطات تموين غاز وزيوت
+    // دمج الخدمات: تموين فقط وعدم وجود زيوت في المحطات
     const mergedServices = {
-      cngRefuel: true,       // جميع المحطات تموين غاز
-      bpOilCenter: true,     // جميع المحطات زيوت
+      cngRefuel: true,        // جميع المحطات تموين فقط
+      bpOilCenter: false,     // عدم وجود زيوت في المحطات (التموين فقط بناء على طلب المستخدم)
       conversionMaintenance: group.some((s) => s.services?.conversionMaintenance),
       cylinderTesting: group.some((s) => s.services?.cylinderTesting),
       carWash: group.some((s) => s.services?.carWash),

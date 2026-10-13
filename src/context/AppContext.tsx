@@ -4,6 +4,7 @@ import { calculateHaversineDistance } from '../utils/geo';
 import { applyCargasNetworkRules, normalizeCargasStationName } from '../utils/cargasRules';
 import { INITIAL_STATIONS } from '../data/initialStations';
 import { applyThemeToDocument } from '../utils/themePalettes';
+import { DEFAULT_CARGAS_LOGO } from '../utils/cargasLogo';
 
 interface AppContextType {
   stations: Station[];
@@ -52,7 +53,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   appName: 'كارجاس وخدمات الغاز - محطاتك',
   appSubtitle: 'المنظومة الذكية لمحطات الغاز الطبيعي، زيوت BP، الصيانة وفحص الأسطوانات',
   logoUrl: null,
-  defaultStationLogoUrl: null,
+  defaultStationLogoUrl: DEFAULT_CARGAS_LOGO,
   adminPin: '0000',
 
   // إعدادات المساعد مُعين (تم إلغاؤه وإخفاؤه بناءً على طلبك مع إمكانية التفعيل من لوحة المدير)
@@ -73,7 +74,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   showMapQuickCng: true,
   showMapQuickCylinder: true,
   showMapQuickBp: true,
-  showMapTypeSwitcher: true,
+  showMapQuickConversion: true,
+  showMapTypeSwitcher: false,
   showStationCards: true,
 
   // النصوص والعناوين
@@ -86,7 +88,8 @@ const DEFAULT_SETTINGS: AppSettings = {
 
   // أسماء الأنشطة القابلة للتخصيص
   cngLabel: 'تموين غاز',
-  bpOilLabel: 'زيوت BP',
+  bpOilLabel: 'مركز زيوت BP متكامل',
+  canopyOilLabel: 'بيع زيوت أسفل المظلة',
   maintenanceLabel: 'صيانة وتحويل',
   cylinderLabel: 'فحص أسطوانات',
 
@@ -112,18 +115,46 @@ const STATIONS_STORAGE_KEY = 'ezouti_gas_stations_v2';
 const SETTINGS_STORAGE_KEY = 'ezouti_gas_settings_v2';
 const THEME_STORAGE_KEY = 'ezouti_gas_theme_v2';
 const USER_LOC_STORAGE_KEY = 'ezouti_gas_user_loc_v2';
+const USER_DATA_FLAG_KEY = 'ezouti_gas_user_has_custom_data_v2';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // 1. المحطات (تحميل المحطات المعتمدة مع توحيد كارجاس والأسماء)
+  // 1. المحطات (اعتماد وحفظ بيانات المستخدم المرفوعة نهائياً ومنع إرجاع البيانات الافتراضية)
   const [stations, setStations] = useState<Station[]>(() => {
     try {
+      const hasUserData = localStorage.getItem(USER_DATA_FLAG_KEY);
       const saved = localStorage.getItem(STATIONS_STORAGE_KEY);
+
+      // دالة تدقيق المواقع الجغرافية للمحطات الرئيسية كألماظة
+      const fixAlmazaCoords = (list: Station[]): Station[] =>
+        list.map((s) => {
+          if (
+            s.id === 'sta-cargas-almaza' ||
+            (s.name.includes('ألماظة') && (Math.abs(s.lat - 30.0831566) > 0.001 || Math.abs(s.lng - 31.3515105) > 0.001))
+          ) {
+            return {
+              ...s,
+              lat: 30.0831566,
+              lng: 31.3515105,
+              address: '312 شارع اللواء محمد إبراهيم الشيخ، ألماظة، مصر الجديدة، القاهرة (بجوار مستشفى الجلاء وطريق المطار)',
+            };
+          }
+          return s;
+        });
+
+      // إذا كان المستخدم قام برفع بيانات أو حفظها أو مسحها سابقاً، نعتمد ما حفظه 100%
+      if (hasUserData === 'true' && saved !== null) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return fixAlmazaCoords(parsed);
+        }
+      }
+
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return applyCargasNetworkRules(parsed);
+        if (Array.isArray(parsed)) {
+          return fixAlmazaCoords(parsed);
         }
       }
     } catch {}
@@ -147,22 +178,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return DEFAULT_SETTINGS;
   });
 
-  // 3. الثيم
+  // 3. الثيم (النهاري والليلي)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     try {
       const saved = localStorage.getItem(THEME_STORAGE_KEY);
       if (saved === 'dark' || saved === 'light') return saved;
+      const savedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
+      if (savedSettings) {
+        const parsed = JSON.parse(savedSettings);
+        if (parsed.themeMode === 'dark' || parsed.themeMode === 'light') {
+          return parsed.themeMode;
+        }
+      }
     } catch {}
     return 'light';
   });
 
-  // 4. موقع المستخدم (يبدأ بموقع وسط القاهرة الافتراضي لحين اكتمال التحديد التلقائي)
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(() => {
+  // 4. موقع المستخدم (يبدأ بنقاء null حتى يتم التقاط موقع المستخدم الفعلي بالـ GPS أو الملاحة)
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; accuracy?: number } | null>(() => {
     try {
       const savedLoc = localStorage.getItem(USER_LOC_STORAGE_KEY);
-      if (savedLoc) return JSON.parse(savedLoc);
+      if (savedLoc) {
+        const parsed = JSON.parse(savedLoc);
+        if (parsed && typeof parsed.lat === 'number' && typeof parsed.lng === 'number') {
+          // استبعاد إحداثيات وسط البلد الافتراضية القديمة لضمان عدم توجيه الملاحة خطأً لوسط البلد
+          const isOldDowntown = Math.abs(parsed.lat - 30.0444) < 0.001 && Math.abs(parsed.lng - 31.2357) < 0.001;
+          if (!isOldDowntown) return parsed;
+        }
+      }
     } catch {}
-    return { lat: 30.0444, lng: 31.2357 };
+    return null;
   });
 
   const [isLocating, setIsLocating] = useState<boolean>(false);
@@ -184,9 +229,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // 8. المساعد "مُعين"
   const [isMoeenOpen, setIsMoeenOpen] = useState<boolean>(false);
 
-  // حفظ المحطات في LocalStorage
+  // حفظ المحطات في LocalStorage مع تعيين علم بيانات المستخدم المعتمدة لمنع استدعاء البيانات الافتراضية
   useEffect(() => {
     try {
+      localStorage.setItem(USER_DATA_FLAG_KEY, 'true');
       localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(stations));
     } catch {}
   }, [stations]);
@@ -203,14 +249,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     applyThemeToDocument(settings.primaryColor, settings.secondaryColor, settings.accentColor);
   }, [settings.primaryColor, settings.secondaryColor, settings.accentColor]);
 
-  // حفظ الثيم
+  // تطبيق وحفظ الثيم (النهاري والليلي) على مستوى الـ DOM بالكامل (html + body)
   useEffect(() => {
     try {
       localStorage.setItem(THEME_STORAGE_KEY, theme);
+      const root = document.documentElement;
+      const body = document.body;
       if (theme === 'dark') {
-        document.documentElement.classList.add('dark');
+        root.classList.add('dark');
+        root.setAttribute('data-theme', 'dark');
+        if (body) {
+          body.classList.add('dark');
+          body.setAttribute('data-theme', 'dark');
+        }
       } else {
-        document.documentElement.classList.remove('dark');
+        root.classList.remove('dark');
+        root.setAttribute('data-theme', 'light');
+        if (body) {
+          body.classList.remove('dark');
+          body.setAttribute('data-theme', 'light');
+        }
       }
     } catch {}
   }, [theme]);
@@ -225,11 +283,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [userLocation]);
 
   const toggleTheme = () => {
-    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+    setTheme((prev) => {
+      const next = prev === 'light' ? 'dark' : 'light';
+      setSettings((s) => ({ ...s, themeMode: next }));
+      return next;
+    });
+  };
+
+  const handleSetTheme = (newTheme: 'light' | 'dark') => {
+    setTheme(newTheme);
+    setSettings((s) => ({ ...s, themeMode: newTheme }));
   };
 
   const updateSettings = (newSettings: Partial<AppSettings>) => {
-    setSettings((prev) => ({ ...prev, ...newSettings }));
+    setSettings((prev) => {
+      const updated = { ...prev, ...newSettings };
+      if (newSettings.themeMode && (newSettings.themeMode === 'light' || newSettings.themeMode === 'dark')) {
+        setTheme(newSettings.themeMode);
+      }
+      return updated;
+    });
   };
 
   const userLocationRef = useRef<{ lat: number; lng: number; accuracy?: number } | null>(userLocation);
@@ -428,23 +501,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsAdminOpen(false);
   };
 
-  // العمليات على المحطات مع تطبيق قاعدة كارجاس الكاملة
+  // العمليات على المحطات مع حفظ واعتماد دائم
   const addStation = (station: Station) => {
     const normalizedName = normalizeCargasStationName(station.name);
     const normalizedStation: Station = {
       ...station,
       name: normalizedName,
-      company: 'كارجاس - Cargas',
+      company: station.company || 'كارجاس - Cargas',
       services: {
         ...station.services,
-        cngRefuel: true,
-        bpOilCenter: true,
       },
       updatedAt: new Date().toISOString(),
     };
     setStations((prev) => {
-      const updated = applyCargasNetworkRules([normalizedStation, ...prev]);
+      const updated = [normalizedStation, ...prev];
       try {
+        localStorage.setItem(USER_DATA_FLAG_KEY, 'true');
         localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(updated));
       } catch {}
       return updated;
@@ -456,22 +528,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const normalizedStation: Station = {
       ...updated,
       name: normalizedName,
-      company: 'كارجاس - Cargas',
+      company: updated.company || 'كارجاس - Cargas',
       services: {
         ...updated.services,
-        cngRefuel: true,
-        bpOilCenter: true,
       },
       updatedAt: new Date().toISOString(),
     };
 
     setStations((prev) => {
       const replaced = prev.map((s) => (s.id === updated.id ? normalizedStation : s));
-      const finalized = applyCargasNetworkRules(replaced);
       try {
-        localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(finalized));
+        localStorage.setItem(USER_DATA_FLAG_KEY, 'true');
+        localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(replaced));
       } catch {}
-      return finalized;
+      return replaced;
     });
 
     if (selectedStation?.id === updated.id) {
@@ -487,6 +557,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setStations((prev) => {
       const updated = prev.filter((s) => s.id !== id);
       try {
+        localStorage.setItem(USER_DATA_FLAG_KEY, 'true');
         localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(updated));
       } catch {}
       return updated;
@@ -495,30 +566,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (activeMapStation?.id === id) setActiveMapStation(null);
   };
 
-  // مسح كافة المحطات (بناءً على طلب المستخدم لمسح البيانات التجريبية)
+  // مسح كافة المحطات واعتماد المسح نهائياً دون استدعاء أي بيانات افتراضية
   const clearAllStations = () => {
     setStations([]);
     setSelectedStation(null);
     setActiveMapStation(null);
     try {
-      localStorage.removeItem(STATIONS_STORAGE_KEY);
+      localStorage.setItem(USER_DATA_FLAG_KEY, 'true');
+      localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify([]));
     } catch {}
   };
 
-  // تطبيق قاعدة كارجاس على كامل المحطات الحالية (توحيد الأسماء، إزالة أرقام 1 و 2، تموين غاز وزيوت)
+  // تطبيق قاعدة كارجاس على كامل المحطات الحالية (توحيد الأسماء، إزالة أرقام 1 و 2)
   const normalizeAllStations = () => {
     setStations((prev) => {
       const normalized = applyCargasNetworkRules(prev);
       try {
+        localStorage.setItem(USER_DATA_FLAG_KEY, 'true');
         localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(normalized));
       } catch {}
       return normalized;
     });
   };
 
-  // حفظ فوري لكافة التعديلات والتغييرات في قاعدة البيانات المحلية
+  // حفظ فوري لكافة التعديلات والتغييرات في قاعدة البيانات المحلية واعتمادها نهائياً
   const saveAllDataNow = (): boolean => {
     try {
+      localStorage.setItem(USER_DATA_FLAG_KEY, 'true');
       localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(stations));
       localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
       return true;
@@ -538,6 +612,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           updatedAt: new Date().toISOString(),
         }));
         try {
+          localStorage.setItem(USER_DATA_FLAG_KEY, 'true');
           localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(updated));
         } catch {}
         return updated;
@@ -552,6 +627,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           idSet.has(s.id) ? { ...s, logoUrl, updatedAt: new Date().toISOString() } : s
         );
         try {
+          localStorage.setItem(USER_DATA_FLAG_KEY, 'true');
           localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(updated));
         } catch {}
         return updated;
@@ -568,6 +644,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           logoUrl: undefined,
         }));
         try {
+          localStorage.setItem(USER_DATA_FLAG_KEY, 'true');
           localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(updated));
         } catch {}
         return updated;
@@ -578,6 +655,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setStations((prev) => {
         const updated = prev.map((s) => (idSet.has(s.id) ? { ...s, logoUrl: undefined } : s));
         try {
+          localStorage.setItem(USER_DATA_FLAG_KEY, 'true');
           localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(updated));
         } catch {}
         return updated;
@@ -585,25 +663,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // استيراد واعتماد المحطات المرفوعة نهائياً في التطبيق
   const importStations = (newStations: Station[], mode: 'append' | 'replace') => {
-    // تطبيق قاعدة كارجاس وتوحيد الأسماء والخدمات
-    const normalizedNew = applyCargasNetworkRules(newStations);
-
-    const stationsWithLogo = normalizedNew.map((s) => ({
+    const stationsWithLogo = newStations.map((s) => ({
       ...s,
       logoUrl: s.logoUrl || settings.defaultStationLogoUrl || undefined,
     }));
 
     if (mode === 'replace') {
-      const finalized = applyCargasNetworkRules(stationsWithLogo);
-      setStations(finalized);
+      setStations(stationsWithLogo);
       try {
-        localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(finalized));
+        localStorage.setItem(USER_DATA_FLAG_KEY, 'true');
+        localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(stationsWithLogo));
       } catch {}
     } else {
       setStations((prev) => {
-        const merged = applyCargasNetworkRules([...prev, ...stationsWithLogo]);
+        const merged = [...prev, ...stationsWithLogo];
         try {
+          localStorage.setItem(USER_DATA_FLAG_KEY, 'true');
           localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(merged));
         } catch {}
         return merged;
@@ -720,7 +797,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         clearStationLogo,
         findClosestStation,
         theme,
-        setTheme,
+        setTheme: handleSetTheme,
         toggleTheme,
       }}
     >

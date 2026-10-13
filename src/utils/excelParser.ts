@@ -1,9 +1,15 @@
 import * as XLSX from 'xlsx';
+import JSZip from 'jszip';
 import { Station, StationServices } from '../types/station';
 import { calculateHaversineDistance } from './geo';
 import { normalizeCargasStationName } from './cargasRules';
 
-export type CenterCategory = 'conversionMaintenance' | 'bpOilCenter' | 'cylinderTesting' | 'auto';
+export type CenterCategory =
+  | 'conversionMaintenance'
+  | 'bpOilCenter'
+  | 'canopyOilSales'
+  | 'cylinderTesting'
+  | 'auto';
 
 export interface ExtractedCenter {
   id: string;
@@ -14,7 +20,8 @@ export interface ExtractedCenter {
   lat: number;
   lng: number;
   hasExactCoordinates: boolean;
-  category: 'conversionMaintenance' | 'bpOilCenter' | 'cylinderTesting';
+  category: 'conversionMaintenance' | 'bpOilCenter' | 'canopyOilSales' | 'cylinderTesting';
+  isUpcoming?: boolean; // خاص بمراكز الفحص: تحت التشغيل (قريباً)
   phone?: string;
   workingHours?: string;
   notes?: string;
@@ -193,6 +200,123 @@ export function parseExcelSheet(
 }
 
 /**
+ * استخراج وقراءة مراكز الفحص والتحويل والزيوت من مستندات Word (.docx و .doc)
+ */
+export async function parseWordDocument(
+  dataBuffer: ArrayBuffer,
+  selectedCategory: CenterCategory,
+  existingStations: Station[]
+): Promise<ExtractedCenter[]> {
+  // 1. محاولة قراءة مستند Word الحديث (.docx) عبر فك ضغط XML
+  try {
+    const zip = await JSZip.loadAsync(dataBuffer);
+    const docXmlFile = zip.file('word/document.xml');
+    if (docXmlFile) {
+      const xmlText = await docXmlFile.async('text');
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlText, 'application/xml');
+
+      const rawRows: Record<string, string>[] = [];
+
+      // أ. فحص الجداول داخل مستند الوورد (<w:tbl>)
+      const tables = xmlDoc.getElementsByTagName('w:tbl');
+      if (tables.length > 0) {
+        for (let t = 0; t < tables.length; t++) {
+          const rows = tables[t].getElementsByTagName('w:tr');
+          for (let r = 0; r < rows.length; r++) {
+            const cells = rows[r].getElementsByTagName('w:tc');
+            const cellTexts: string[] = [];
+            for (let c = 0; c < cells.length; c++) {
+              const textNodes = cells[c].getElementsByTagName('w:t');
+              let cellText = '';
+              for (let n = 0; n < textNodes.length; n++) {
+                cellText += textNodes[n].textContent || '';
+              }
+              cellTexts.push(cellText.trim());
+            }
+            if (cellTexts.filter(Boolean).length >= 2) {
+              rawRows.push({
+                name: cellTexts[0] || '',
+                address: cellTexts[1] || '',
+                gov: cellTexts[2] || '',
+                phone: cellTexts[3] || '',
+                status: cellTexts.join(' '),
+              });
+            }
+          }
+        }
+      }
+
+      // ب. قراءة الفقرات (<w:p>) إذا لم تكن هناك جداول كافية
+      if (rawRows.length === 0) {
+        const paragraphs = xmlDoc.getElementsByTagName('w:p');
+        for (let p = 0; p < paragraphs.length; p++) {
+          const textNodes = paragraphs[p].getElementsByTagName('w:t');
+          let pText = '';
+          for (let n = 0; n < textNodes.length; n++) {
+            pText += textNodes[n].textContent || '';
+          }
+          pText = pText.trim();
+          if (pText.length > 5) {
+            const parts = pText.includes('\t')
+              ? pText.split('\t')
+              : pText.includes(' - ')
+              ? pText.split(' - ')
+              : pText.includes(';')
+              ? pText.split(';')
+              : [pText];
+
+            if (parts.length >= 2) {
+              rawRows.push({
+                name: parts[0]?.trim() || '',
+                address: parts[1]?.trim() || '',
+                gov: parts[2]?.trim() || '',
+                phone: parts[3]?.trim() || '',
+                status: pText,
+              });
+            } else {
+              rawRows.push({
+                name: pText,
+                address: pText,
+                status: pText,
+              });
+            }
+          }
+        }
+      }
+
+      if (rawRows.length > 0) {
+        return processRawCenterRows(rawRows, selectedCategory, existingStations);
+      }
+    }
+  } catch (docxErr) {
+    console.warn('DOCX zip read failed, attempting binary/text fallback extraction...', docxErr);
+  }
+
+  // 2. خط الإنقاذ: استخراج النصوص العربية والإنجليزية من بايتات المستند أو ملفات .doc القديمة
+  try {
+    const uint8 = new Uint8Array(dataBuffer);
+    // تجربة فك الترميز بـ UTF-8
+    const decoder = new TextDecoder('utf-8', { fatal: false });
+    const rawStr = decoder.decode(uint8);
+
+    // استخراج المقاطع النصية ذات المعنى (العربية والإنجليزية والأرقام)
+    const matches = rawStr.match(/[\u0600-\u06FF\w\s.,;:/\-()]{6,}/g) || [];
+    const lines = matches
+      .map((m) => m.trim())
+      .filter((m) => m.length > 8 && /[\u0600-\u06FF]/.test(m)); // تحتوي على كلمات عربية صالحة
+
+    if (lines.length > 0) {
+      return parsePdfOrTextContent(lines.join('\n'), selectedCategory, existingStations);
+    }
+  } catch (fallbackErr) {
+    console.error('Binary doc fallback failed:', fallbackErr);
+  }
+
+  throw new Error('تعذر قراءة محتوى مستند الوورد. يرجى التأكد من احتوائه على نصوص صالحة أو نسخه ولصقه في الصندوق.');
+}
+
+/**
  * استخراج مراكز من نصوص ملف PDF أو جداول منسوخة
  */
 export function parsePdfOrTextContent(
@@ -303,13 +427,23 @@ function processRawCenterRows(
       lng = geocoded.lng;
     }
 
-    // تحديد نوع المركز: تحويل / زيوت / فحص
-    let category: 'conversionMaintenance' | 'bpOilCenter' | 'cylinderTesting' = 'conversionMaintenance';
+    // تحديد نوع المركز: تحويل / مركز زيوت BP / بيع زيوت أسفل المظلة / فحص
+    let category: 'conversionMaintenance' | 'bpOilCenter' | 'canopyOilSales' | 'cylinderTesting' = 'conversionMaintenance';
+    let isUpcoming = false;
+
+    const fullText = `${name} ${address} ${findFieldValue(row, ['الحالة', 'النشاط', 'status', 'ملاحظات', 'notes']) || ''}`.toLowerCase();
+
+    // فحص ما إذا كان فحص الأسطوانات تحت التشغيل (قريباً)
+    if (fullText.includes('تحت التشغيل') || fullText.includes('قريباً') || fullText.includes('قريبا') || fullText.includes('مستقبلي') || fullText.includes('تجهيز') || fullText.includes('upcoming')) {
+      isUpcoming = true;
+    }
+
     if (selectedCategory === 'auto') {
-      const full = `${name} ${address}`.toLowerCase();
-      if (full.includes('فحص') || full.includes('أسطوان') || full.includes('اختبار') || full.includes('اسطوان')) {
+      if (fullText.includes('فحص') || fullText.includes('أسطوان') || fullText.includes('اختبار') || fullText.includes('اسطوان')) {
         category = 'cylinderTesting';
-      } else if (full.includes('زيت') || full.includes('زيوت') || full.includes('bp') || full.includes('كاسترول') || full.includes('castrol')) {
+      } else if (fullText.includes('مظلة') || fullText.includes('مظله') || fullText.includes('اسفل المظلة') || fullText.includes('أسفل المظلة') || fullText.includes('طلمبات') || fullText.includes('عبوات') || fullText.includes('منفذ بيع')) {
+        category = 'canopyOilSales';
+      } else if (fullText.includes('مركز زيت') || fullText.includes('مركز زيوت') || fullText.includes('تغيير زيت') || fullText.includes('خدمة زيوت') || fullText.includes('bp') || fullText.includes('كاسترول') || fullText.includes('castrol') || fullText.includes('زيوت')) {
         category = 'bpOilCenter';
       } else {
         category = 'conversionMaintenance';
@@ -318,37 +452,47 @@ function processRawCenterRows(
       category = selectedCategory;
     }
 
-    // فحص وجود محطة قريبة للتسجيل ضمن نطاقها أو كمركز منفصل
-    let closestStation: Station | null = null;
-    let minDistance = 9999;
+    // التطابق الذكي مع محطات الخريطة (بالاسم والموقع الجغرافي والإحداثيات والمحافظة)
+    const matchResult = findBestMatchingStationForCenter(
+      name,
+      address,
+      governorate,
+      lat,
+      lng,
+      existingStations
+    );
 
-    for (const st of existingStations) {
-      const dist = calculateHaversineDistance(lat, lng, st.lat, st.lng);
-      if (dist < minDistance) {
-        minDistance = dist;
-        closestStation = st;
-      }
+    const matchedStation = matchResult.matchedStation;
+    const matchedStationId = matchedStation ? matchedStation.id : undefined;
+    const matchedStationName = matchedStation ? matchedStation.name : undefined;
+    const matchedStationDistance = matchResult.distance;
+
+    // إذا تم العثور على محطة مطابقة على الخريطة:
+    // 1. تكون طريقة التسجيل الافتراضية دمج وإضافة النشاط للمحطة تلقائياً
+    // 2. إذا لم تكن إحداثيات الملف دقيقة، يرث إحداثيات المحطة القائمة بالخريطة مباشرة
+    if (matchedStation && !hasExactCoordinates) {
+      lat = matchedStation.lat;
+      lng = matchedStation.lng;
+      hasExactCoordinates = true;
     }
 
-    // إذا كانت المسافة أقل من 1.5 كم، نقترح الربط بها مع خيار البقاء منفصلاً
-    const matchedStationId = minDistance <= 2.0 && closestStation ? closestStation.id : undefined;
-    const matchedStationName = minDistance <= 2.0 && closestStation ? closestStation.name : undefined;
-    const matchedStationDistance = minDistance <= 2.0 && closestStation ? minDistance : undefined;
+    const actionType: 'standalone' | 'merge' = matchedStationId ? 'merge' : 'standalone';
 
     results.push({
       id: `center-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 6)}`,
-      name: normalizeCargasCenterName(name, category),
+      name: normalizeCargasCenterName(name, category, isUpcoming),
       address: address || 'عنوان المركز المسجل',
-      governorate: governorate || 'القاهرة',
-      city: city || undefined,
+      governorate: governorate || (matchedStation ? matchedStation.governorate : 'القاهرة'),
+      city: city || (matchedStation ? matchedStation.city : undefined),
       lat,
       lng,
       hasExactCoordinates,
       category,
-      phone: phone || undefined,
+      isUpcoming,
+      phone: phone || (matchedStation ? matchedStation.phone : undefined),
       workingHours,
       status: hasExactCoordinates ? 'ready' : 'geocoded',
-      actionType: matchedStationId ? 'merge' : 'standalone',
+      actionType,
       matchedStationId,
       matchedStationName,
       matchedStationDistance,
@@ -359,23 +503,147 @@ function processRawCenterRows(
 }
 
 /**
- * توحيد وبدء اسم المركز بـ "كارجاس" وفق القواعد المؤسسية
+ * دالة المطابقة الذكية بين المركز المرفوع ومحطات الخريطة الحالية
+ * تعتمد على: الكلمات المفتاحية للاسم والموقع + العنوان + المحافظة + المسافة الجغرافية
+ */
+function findBestMatchingStationForCenter(
+  centerName: string,
+  centerAddress: string,
+  centerGov: string,
+  centerLat: number,
+  centerLng: number,
+  existingStations: Station[]
+): {
+  matchedStation: Station | null;
+  distance?: number;
+  matchReason?: string;
+} {
+  if (!existingStations || existingStations.length === 0) {
+    return { matchedStation: null };
+  }
+
+  const normalizeForMatch = (t: string) =>
+    (t || '')
+      .replace(/[()\-–_/#:0-9٠-٩]/g, ' ')
+      .replace(/أ|إ|آ/g, 'ا')
+      .replace(/ة/g, 'ه')
+      .replace(/ى/g, 'ي')
+      .replace(/(?:محطة|محطه|مركز|منفذ|خدمة|كارجاس|cargas|كار\s*جاس|فرع|شارع|طريق|ميدان|منطقة|حي)/gi, ' ')
+      .trim();
+
+  const nameKeywords = normalizeForMatch(centerName)
+    .split(/\s+/)
+    .filter(
+      (w) =>
+        w.length >= 3 &&
+        !['فحص', 'تحويل', 'صيانة', 'اسطوان', 'اسطوانات', 'زيوت', 'زيت', 'مظلة', 'مظله', 'طلمبات', 'بترول', 'شركة', 'قريبا', 'التشغيل', 'الخدمة'].includes(w)
+    );
+
+  const addressKeywords = normalizeForMatch(centerAddress)
+    .split(/\s+/)
+    .filter(
+      (w) =>
+        w.length >= 3 &&
+        !['شارع', 'طريق', 'ميدان', 'بجوار', 'امام', 'خلف', 'تقاطع', 'الرئيسي'].includes(w)
+    );
+
+  const allCenterKeywords = Array.from(new Set([...nameKeywords, ...addressKeywords]));
+
+  let bestStation: Station | null = null;
+  let bestScore = 0;
+  let bestDist: number | undefined = undefined;
+  let bestReason = '';
+
+  for (const st of existingStations) {
+    let score = 0;
+    const stNormName = normalizeForMatch(st.name);
+    const stNormAddr = normalizeForMatch(st.address || '');
+
+    // أ) تطابق الكلمات المفتاحية للاسم والموقع
+    let matchedKeywords = 0;
+    for (const kw of allCenterKeywords) {
+      if (stNormName.includes(kw)) {
+        matchedKeywords++;
+        score += 65;
+      } else if (stNormAddr.includes(kw)) {
+        matchedKeywords++;
+        score += 40;
+      }
+    }
+
+    // ب) تطابق المحافظة
+    const centerGovClean = (centerGov || '').replace(/أ|إ|آ/g, 'ا').replace(/ة/g, 'ه').trim();
+    const stGovClean = (st.governorate || '').replace(/أ|إ|آ/g, 'ا').replace(/ة/g, 'ه').trim();
+    if (centerGovClean && stGovClean && (centerGovClean.includes(stGovClean) || stGovClean.includes(centerGovClean))) {
+      score += 25;
+    }
+
+    // ج) القرب الجغرافي (إن وُجدت إحداثيات صالحة)
+    let dist: number | undefined = undefined;
+    if (centerLat !== 0 && centerLng !== 0 && st.lat !== 0 && st.lng !== 0) {
+      dist = calculateHaversineDistance(centerLat, centerLng, st.lat, st.lng);
+      if (dist <= 0.8) {
+        score += 100;
+      } else if (dist <= 2.0) {
+        score += 70;
+      } else if (dist <= 4.0) {
+        score += 45;
+      } else if (dist <= 8.0) {
+        score += 20;
+      } else if (dist > 35.0) {
+        score -= 50;
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestStation = st;
+      bestDist = dist;
+      if (matchedKeywords > 0 && dist !== undefined && dist <= 3.0) {
+        bestReason = `تطابق الاسم والموقع (${dist.toFixed(1)} كم)`;
+      } else if (matchedKeywords > 0) {
+        bestReason = `تطابق اسم المحطة والمنطقة`;
+      } else if (dist !== undefined && dist <= 2.5) {
+        bestReason = `قرب جغرافي مباشر (${dist.toFixed(1)} كم)`;
+      } else {
+        bestReason = `تطابق بالمنطقة والمحافظة`;
+      }
+    }
+  }
+
+  // إذا حقق درجة ثقة كافية
+  if (bestScore >= 40 && bestStation) {
+    return {
+      matchedStation: bestStation,
+      distance: bestDist,
+      matchReason: bestReason,
+    };
+  }
+
+  return { matchedStation: null };
+}
+
+/**
+ * توحيد وبدء اسم المركز بـ "كارجاس" وفق القواعد المؤسسية مع تمييز "قريباً"
  */
 function normalizeCargasCenterName(
   rawName: string,
-  category: 'conversionMaintenance' | 'bpOilCenter' | 'cylinderTesting'
+  category: 'conversionMaintenance' | 'bpOilCenter' | 'canopyOilSales' | 'cylinderTesting',
+  isUpcoming?: boolean
 ): string {
   let name = rawName.trim();
   const categoryPrefix =
     category === 'cylinderTesting'
-      ? 'مركز فحص أسطوانات كارجاس'
+      ? (isUpcoming ? 'مركز فحص أسطوانات (قريباً) كارجاس' : 'مركز فحص أسطوانات كارجاس')
+      : category === 'canopyOilSales'
+      ? 'منفذ بيع زيوت أسفل المظلة كارجاس'
       : category === 'bpOilCenter'
       ? 'مركز زيوت BP كارجاس'
       : 'مركز تحويل وصيانة كارجاس';
 
   if (!name.includes('كارجاس')) {
     name = `${categoryPrefix} - ${name}`;
-  } else if (!name.startsWith('كارجاس') && !name.startsWith('مركز')) {
+  } else if (!name.startsWith('كارجاس') && !name.startsWith('مركز') && !name.startsWith('منفذ')) {
     name = `كارجاس - ${name}`;
   }
 
@@ -413,23 +681,40 @@ export function applyImportedCentersToStations(
 
   for (const center of importedCenters) {
     if (center.actionType === 'merge' && center.matchedStationId && stationsMap.has(center.matchedStationId)) {
-      // 1. الدمج ضمن نطاق محطة قائمة وتفعيل الخدمة
+      // 1. الدمج التلقائي ضمن نطاق محطة قائمة بالخريطة وتفعيل الخدمة والنشاط عليها
       const target = stationsMap.get(center.matchedStationId)!;
-      target.services[center.category] = true;
-      if (center.phone && !target.phone) {
+      // ضمان وجود التموين الأساسي
+      target.services.cngRefuel = true;
+
+      if (center.category === 'cylinderTesting') {
+        target.services.cylinderTesting = true;
+        // التفرقة بين فحص فعلي وفحص قريباً (تحت التشغيل)
+        target.services.cylinderTestingUpcoming = center.isUpcoming === true;
+      } else if (center.category === 'canopyOilSales') {
+        target.services.canopyOilSales = true;
+      } else if (center.category === 'bpOilCenter') {
+        target.services.bpOilCenter = true;
+      } else if (center.category === 'conversionMaintenance') {
+        target.services.conversionMaintenance = true;
+      }
+
+      if (center.phone && (!target.phone || target.phone === '19617')) {
         target.phone = center.phone;
       }
       if (center.workingHours) {
         target.notes = `${target.notes || ''} [مواعيد ${center.name}: ${center.workingHours}]`.trim();
       }
+      target.updatedAt = new Date().toISOString();
       mergedCount++;
     } else {
-      // 2. تسجيل كمركز منفصل تماماً
+      // 2. تسجيل كمركز جديد على الخريطة بكامل أنشطته مع التموين
       const services: StationServices = {
         cngRefuel: true, // تفعيل التموين الافتراضي لشبكة كارجاس
         conversionMaintenance: center.category === 'conversionMaintenance',
         bpOilCenter: center.category === 'bpOilCenter',
+        canopyOilSales: center.category === 'canopyOilSales',
         cylinderTesting: center.category === 'cylinderTesting',
+        cylinderTestingUpcoming: center.category === 'cylinderTesting' && center.isUpcoming === true,
         convenienceStore: true,
       };
 
@@ -447,8 +732,9 @@ export function applyImportedCentersToStations(
         workingHours: center.workingHours || '24 ساعة',
         status: 'active',
         pressure: '220 بار',
-        notes: `مركز معتمد تم تسجيله وتوثيق موقعه (${center.category === 'cylinderTesting' ? 'فحص أسطوانات' : center.category === 'bpOilCenter' ? 'زيوت BP' : 'تحويل وصيانة'})`,
+        notes: center.workingHours ? `مواعيد العمل: ${center.workingHours}` : undefined,
         rating: 4.8,
+        updatedAt: new Date().toISOString(),
       };
 
       stationsMap.set(newStation.id, newStation);

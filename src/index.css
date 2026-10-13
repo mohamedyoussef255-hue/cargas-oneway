@@ -1,19 +1,34 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
+
 :root {
   --theme-primary: #059669;
   --theme-primary-hover: #047857;
   --theme-primary-light: #ecfdf5;
   --theme-secondary: #0d9488;
   --theme-accent: #10b981;
+  color-scheme: light;
 }
 
-/* دعم التبديل السلس للثيم والألوان */
+html.dark,
+html[data-theme="dark"],
+body.dark {
+  color-scheme: dark;
+}
+
+/* دعم التبديل السلس للثيم والألوان على كامل صفحات التطبيق */
 html, body {
   transition: background-color 0.25s ease, color 0.25s ease;
 }
 
-/* أنماط البطاقات والأزرار المخصصة عند تغيير الألوان */
+html.dark,
+html.dark body {
+  background-color: #020617;
+  color: #f8fafc;
+}
+
+/* أنماط البطاقات والأزرار المخصصة عند تغيير الألوان وبنتونة الهوية */
 .btn-primary-custom {
   background-color: var(--theme-primary);
   color: #ffffff;

@@ -36,12 +36,29 @@ export function formatDistance(distanceKm: number | null | undefined): string {
 
 /**
  * رابط التوجيه والملاحة المباشر لفتح خرائط جوجل (Google Maps App)
- * يعمل مجاناً وبدون أي اشتراك أو تكاليف API، حيث يفتح تطبيق خرائط جوجل مباشرة في هاتف المستخدم بملاحة صوتية حية
+ * يبدأ الملاحة دائماً من موقع المستخدم الجغرافي الحقيقي المباشر إلى المحطة دون الذهاب لوسط البلد
  */
-export function getGoogleMapsNavigationUrl(lat: number, lng: number, name?: string): string {
-  const encodedName = name ? encodeURIComponent(name) : '';
-  // Google Maps Universal Navigation URL
-  return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}${encodedName ? `&destination_place_id=${encodedName}` : ''}&travelmode=driving`;
+export function getGoogleMapsNavigationUrl(
+  lat: number,
+  lng: number,
+  _name?: string,
+  userLocation?: { lat: number; lng: number } | null
+): string {
+  // فحص ما إذا كان الموقع هو موقع وسط البلد الافتراضي القديم لتجنبه
+  const isDowntownFallback =
+    userLocation &&
+    Math.abs(userLocation.lat - 30.0444) < 0.001 &&
+    Math.abs(userLocation.lng - 31.2357) < 0.001;
+
+  // عند توفر إحداثيات GPS حقيقية للمستخدم، نمررها كنقطة بداية الملاحة (origin)
+  // وفي حال عدم توفرها أو كونها الافتراضية، نمرر Current+Location ليطلب Google Maps موقع الجهاز المباشر
+  const originParam =
+    userLocation && !isDowntownFallback
+      ? `origin=${userLocation.lat},${userLocation.lng}`
+      : `origin=Current+Location`;
+
+  // نستخدم destination=${lat},${lng} نقياً دون أي Place ID وهمي يسبب تحويل الملاحة لوسط البلد
+  return `https://www.google.com/maps/dir/?api=1&${originParam}&destination=${lat},${lng}&travelmode=driving`;
 }
 
 /**
