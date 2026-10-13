@@ -88,7 +88,11 @@ export interface AppSettings {
   accentColor: string;
   themeMode: 'light' | 'dark' | 'auto';
 
-  // الخريطة والمظهر
+  // الخريطة والمظهر وإعدادات مفاتيح API
   defaultMapCenter: [number, number];
   defaultZoom: number;
+  mapApiKey?: string;                // مفتاح API لتشغيل الخرائط (Google Maps / Mapbox / مخصص)
+  mapProvider?: 'free_osm_satellite' | 'google_maps' | 'custom'; // نوع مزود الخرائط
+  customTileUrl?: string;            // رابط خادم البلاطات المخصص في حالة الرغبة
+  activeMapSystem?: 'satellite' | 'osm' | 'voyager' | 'dark' | 'topo' | 'hot'; // نظام الخريطة الافتراضي
 }

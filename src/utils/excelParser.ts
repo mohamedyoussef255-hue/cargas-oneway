@@ -1,8 +1,32 @@
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import { Station, StationServices } from '../types/station';
 import { calculateHaversineDistance } from './geo';
 import { normalizeCargasStationName } from './cargasRules';
+
+// تهيئة worker الخرائط ومستندات PDF بأمان
+if (typeof window !== 'undefined') {
+  try {
+    GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@6.4.299/build/pdf.worker.min.mjs`;
+  } catch (err) {
+    console.warn('PDF worker init warning:', err);
+  }
+}
+
+/**
+ * تنقية وتوحيد النصوص العربية وإزالة التطويل (الكشيدة) والتشكيل وعلامات الترقيم
+ */
+export function normalizeArabicString(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/\u0640/g, '') // إزالة التطويل (ـ) مثل: المركـــــز -> المركز
+    .replace(/[\u064B-\u065F\u0670]/g, '') // إزالة التشكيل والتنوين
+    .replace(/أ|إ|آ/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .trim();
+}
 
 export type CenterCategory =
   | 'conversionMaintenance'
@@ -194,9 +218,87 @@ export function parseExcelSheet(
   if (!sheetName) return [];
 
   const worksheet = workbook.Sheets[sheetName];
-  const jsonData = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, { defval: '' });
+  // قراءة البيانات كمصفوفة صفوف للتعرف على صف العناوين بدقة
+  const rawMatrix = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1, defval: '' });
 
-  return processRawCenterRows(jsonData, selectedCategory, existingStations);
+  if (rawMatrix.length === 0) return [];
+
+  const tokensList: string[][] = rawMatrix.map((row) =>
+    Array.isArray(row) ? row.map((cell) => (cell !== undefined && cell !== null ? String(cell).trim() : '')) : []
+  );
+
+  const structuredRows = parseTableRowsFromTokens(tokensList);
+  return processRawCenterRows(structuredRows, selectedCategory, existingStations);
+}
+
+/**
+ * تحليل ملف PDF (.pdf) واستخراج جداول ونصوص المراكز والمحطات بدقة
+ */
+export async function parsePdfDocument(
+  dataBuffer: ArrayBuffer,
+  selectedCategory: CenterCategory,
+  existingStations: Station[]
+): Promise<ExtractedCenter[]> {
+  try {
+    const loadingTask = getDocument({
+      data: new Uint8Array(dataBuffer),
+      useWorkerFetch: false,
+    });
+    const pdfDoc = await loadingTask.promise;
+    const allLines: string[] = [];
+
+    for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+      const page = await pdfDoc.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      const items = textContent.items as any[];
+
+      // تجميع العناصر النصية حسب الإحداثي الرأسي y لتشكيل أسطر وجداول منظمة
+      const lineMap = new Map<number, { x: number; text: string }[]>();
+      for (const item of items) {
+        if (!item.str || !item.str.trim()) continue;
+        const y = Math.round(item.transform[5]);
+        let matchedY = Array.from(lineMap.keys()).find((k) => Math.abs(k - y) <= 4);
+        if (matchedY === undefined) {
+          matchedY = y;
+          lineMap.set(matchedY, []);
+        }
+        lineMap.get(matchedY)!.push({ x: item.transform[4], text: item.str });
+      }
+
+      // فرز الأسطر رأسياً من الأعلى للأسفل
+      const sortedYs = Array.from(lineMap.keys()).sort((a, b) => b - a);
+      for (const y of sortedYs) {
+        const lineItems = lineMap.get(y)!;
+        lineItems.sort((a, b) => b.x - a.x);
+        const lineText = lineItems.map((it) => it.text.trim()).join('\t');
+        if (lineText.trim().length > 3) {
+          allLines.push(lineText);
+        }
+      }
+    }
+
+    if (allLines.length > 0) {
+      return parsePdfOrTextContent(allLines.join('\n'), selectedCategory, existingStations);
+    }
+  } catch (pdfErr) {
+    console.warn('PDF.js structured parsing warning, attempting fallback text extraction...', pdfErr);
+  }
+
+  // خط الإنقاذ: استخراج النصوص الصالحة مباشرة من بايتات الملف
+  try {
+    const uint8 = new Uint8Array(dataBuffer);
+    const decoder = new TextDecoder('utf-8', { fatal: false });
+    const rawStr = decoder.decode(uint8);
+    const matches = rawStr.match(/[\u0600-\u06FF\w\s.,;:/\-()]{5,}/g) || [];
+    const arabicLines = matches.filter((m) => /[\u0600-\u06FF]/.test(m));
+    if (arabicLines.length > 0) {
+      return parsePdfOrTextContent(arabicLines.join('\n'), selectedCategory, existingStations);
+    }
+  } catch (fallbackErr) {
+    console.error('PDF fallback failed:', fallbackErr);
+  }
+
+  throw new Error('تعذر قراءة ملف PDF. تأكد من احتواء الملف على نصوص أو استخدم صندوق اللصق المباشر.');
 }
 
 /**
@@ -207,7 +309,6 @@ export async function parseWordDocument(
   selectedCategory: CenterCategory,
   existingStations: Station[]
 ): Promise<ExtractedCenter[]> {
-  // 1. محاولة قراءة مستند Word الحديث (.docx) عبر فك ضغط XML
   try {
     const zip = await JSZip.loadAsync(dataBuffer);
     const docXmlFile = zip.file('word/document.xml');
@@ -216,7 +317,7 @@ export async function parseWordDocument(
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(xmlText, 'application/xml');
 
-      const rawRows: Record<string, string>[] = [];
+      const tokensList: string[][] = [];
 
       // أ. فحص الجداول داخل مستند الوورد (<w:tbl>)
       const tables = xmlDoc.getElementsByTagName('w:tbl');
@@ -234,21 +335,15 @@ export async function parseWordDocument(
               }
               cellTexts.push(cellText.trim());
             }
-            if (cellTexts.filter(Boolean).length >= 2) {
-              rawRows.push({
-                name: cellTexts[0] || '',
-                address: cellTexts[1] || '',
-                gov: cellTexts[2] || '',
-                phone: cellTexts[3] || '',
-                status: cellTexts.join(' '),
-              });
+            if (cellTexts.some((c) => c.length > 0)) {
+              tokensList.push(cellTexts);
             }
           }
         }
       }
 
       // ب. قراءة الفقرات (<w:p>) إذا لم تكن هناك جداول كافية
-      if (rawRows.length === 0) {
+      if (tokensList.length === 0) {
         const paragraphs = xmlDoc.getElementsByTagName('w:p');
         for (let p = 0; p < paragraphs.length; p++) {
           const textNodes = paragraphs[p].getElementsByTagName('w:t');
@@ -266,27 +361,14 @@ export async function parseWordDocument(
               ? pText.split(';')
               : [pText];
 
-            if (parts.length >= 2) {
-              rawRows.push({
-                name: parts[0]?.trim() || '',
-                address: parts[1]?.trim() || '',
-                gov: parts[2]?.trim() || '',
-                phone: parts[3]?.trim() || '',
-                status: pText,
-              });
-            } else {
-              rawRows.push({
-                name: pText,
-                address: pText,
-                status: pText,
-              });
-            }
+            tokensList.push(parts.map((s) => s.trim()));
           }
         }
       }
 
-      if (rawRows.length > 0) {
-        return processRawCenterRows(rawRows, selectedCategory, existingStations);
+      if (tokensList.length > 0) {
+        const structuredRows = parseTableRowsFromTokens(tokensList);
+        return processRawCenterRows(structuredRows, selectedCategory, existingStations);
       }
     }
   } catch (docxErr) {
@@ -296,15 +378,13 @@ export async function parseWordDocument(
   // 2. خط الإنقاذ: استخراج النصوص العربية والإنجليزية من بايتات المستند أو ملفات .doc القديمة
   try {
     const uint8 = new Uint8Array(dataBuffer);
-    // تجربة فك الترميز بـ UTF-8
     const decoder = new TextDecoder('utf-8', { fatal: false });
     const rawStr = decoder.decode(uint8);
 
-    // استخراج المقاطع النصية ذات المعنى (العربية والإنجليزية والأرقام)
     const matches = rawStr.match(/[\u0600-\u06FF\w\s.,;:/\-()]{6,}/g) || [];
     const lines = matches
       .map((m) => m.trim())
-      .filter((m) => m.length > 8 && /[\u0600-\u06FF]/.test(m)); // تحتوي على كلمات عربية صالحة
+      .filter((m) => m.length > 8 && /[\u0600-\u06FF]/.test(m));
 
     if (lines.length > 0) {
       return parsePdfOrTextContent(lines.join('\n'), selectedCategory, existingStations);
@@ -314,6 +394,118 @@ export async function parseWordDocument(
   }
 
   throw new Error('تعذر قراءة محتوى مستند الوورد. يرجى التأكد من احتوائه على نصوص صالحة أو نسخه ولصقه في الصندوق.');
+}
+
+/**
+ * تحليل صفوف الجداول المستخرجة من المستندات وفهم أعمدة المسلسل والمحافظة والمنطقة والمركز والعنوان
+ */
+function parseTableRowsFromTokens(rowsOfTokens: string[][]): Record<string, string>[] {
+  const result: Record<string, string>[] = [];
+  let lastKnownGov = 'القاهرة';
+
+  let nameCol = -1;
+  let govCol = -1;
+  let addrCol = -1;
+  let statusCol = -1;
+  let phoneCol = -1;
+  let startRow = 0;
+
+  if (rowsOfTokens.length > 0) {
+    const firstRowNorm = rowsOfTokens[0].map(normalizeArabicString);
+    const hasHeaderKeywords = firstRowNorm.some((c) =>
+      ['م', 'مسلسل', 'المحافظه', 'المحافظة', 'المنطقه', 'المنطقة', 'المركز', 'اسم المحطه', 'اسم المحطة', 'العنوان', 'النشاط', 'الحاله', 'الحالة'].includes(c)
+    );
+
+    if (hasHeaderKeywords) {
+      startRow = 1;
+      for (let i = 0; i < firstRowNorm.length; i++) {
+        const h = firstRowNorm[i];
+        if (['المحافظه', 'المحافظة', 'gov', 'governorate'].includes(h)) govCol = i;
+        else if (['المركز', 'اسم المركز', 'المنطقه', 'المنطقة', 'المحطه', 'المحطة', 'اسم المحطه', 'اسم المحطة', 'اسم الموقع', 'name'].includes(h)) nameCol = i;
+        else if (['العنوان', 'الموقع', 'address', 'site'].includes(h)) addrCol = i;
+        else if (['النشاط', 'الحاله', 'الحالة', 'الملاحظات', 'notes', 'status'].includes(h)) statusCol = i;
+        else if (['الهاتف', 'تليفون', 'phone', 'tel'].includes(h)) phoneCol = i;
+      }
+    }
+  }
+
+  const knownGovs = [
+    'القاهرة', 'الجيزة', 'الإسكندرية', 'بورسعيد', 'دمياط', 'الإسماعيلية',
+    'البحيرة', 'المنوفية', 'الشرقية', 'القليوبية', 'الدقهلية', 'الغربية',
+    'بني سويف', 'المنيا', 'سوهاج', 'الفيوم', 'قنا', 'البحر الأحمر',
+    'شمال سيناء', 'جنوب سيناء', 'السويس', 'أسوان', 'أسيوط', 'الأقصر',
+    'كفر الشيخ', 'مطروح', 'الوادي الجديد', '6 أكتوبر', 'حلوان'
+  ].map(normalizeArabicString);
+
+  for (let r = startRow; r < rowsOfTokens.length; r++) {
+    const tokens = rowsOfTokens[r];
+    if (tokens.length === 0 || tokens.every((t) => !t.trim())) continue;
+
+    let name = '';
+    let address = '';
+    let gov = '';
+    let status = '';
+    let phone = '';
+
+    if (nameCol !== -1) {
+      name = tokens[nameCol] || '';
+      address = addrCol !== -1 ? tokens[addrCol] || '' : '';
+      gov = govCol !== -1 ? tokens[govCol] || '' : '';
+      status = statusCol !== -1 ? tokens[statusCol] || '' : '';
+      phone = phoneCol !== -1 ? tokens[phoneCol] || '' : '';
+
+      if (gov && gov.trim()) {
+        lastKnownGov = gov.trim();
+      } else {
+        gov = lastKnownGov;
+      }
+    } else {
+      let cleanTokens = [...tokens];
+      if (cleanTokens.length > 1 && /^[0-9٠-٩]+$/.test(cleanTokens[0].trim())) {
+        cleanTokens.shift();
+      }
+
+      if (cleanTokens.length === 1) {
+        name = cleanTokens[0];
+        address = cleanTokens[0];
+      } else if (cleanTokens.length === 2) {
+        name = cleanTokens[0];
+        address = cleanTokens[1];
+        status = cleanTokens[1];
+      } else if (cleanTokens.length >= 3) {
+        const firstTokenNorm = normalizeArabicString(cleanTokens[0]);
+        const isFirstGov = knownGovs.includes(firstTokenNorm) || cleanTokens[0].trim() === '';
+
+        if (isFirstGov) {
+          if (cleanTokens[0].trim()) {
+            gov = cleanTokens[0].trim();
+            lastKnownGov = gov;
+          } else {
+            gov = lastKnownGov;
+          }
+          name = cleanTokens[1] || '';
+          address = cleanTokens.slice(2).join(' – ');
+          status = cleanTokens.slice(2).join(' ');
+        } else {
+          name = cleanTokens[0] || '';
+          address = cleanTokens[1] || '';
+          status = cleanTokens.slice(2).join(' ');
+        }
+      }
+    }
+
+    if (name.trim()) {
+      result.push({
+        name: name.trim(),
+        address: address.trim() || name.trim(),
+        gov: gov.trim() || lastKnownGov,
+        status: status.trim() || `${name} ${address}`,
+        phone: phone.trim(),
+      });
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -327,36 +519,30 @@ export function parsePdfOrTextContent(
   const lines = text
     .split(/\r?\n/)
     .map((l) => l.trim())
-    .filter((l) => l.length > 5);
+    .filter((l) => l.length > 3);
 
-  const rawRows: Record<string, string>[] = [];
+  const tokensList: string[][] = [];
 
   for (const line of lines) {
-    // محاولة تقسيم بالـ Tab أو الفاصلة أو الشرطة
     const parts = line.includes('\t')
       ? line.split('\t')
       : line.includes(';')
       ? line.split(';')
+      : line.includes(' – ')
+      ? line.split(' – ')
+      : line.includes(' - ')
+      ? line.split(' - ')
       : line.includes(',')
       ? line.split(',')
-      : line.split(' - ');
+      : line.split(/\s{2,}/);
 
-    if (parts.length >= 2) {
-      rawRows.push({
-        name: parts[0]?.trim() || '',
-        address: parts[1]?.trim() || '',
-        gov: parts[2]?.trim() || '',
-        phone: parts[3]?.trim() || '',
-      });
-    } else {
-      rawRows.push({
-        name: line,
-        address: line,
-      });
+    if (parts.length > 0 && parts.some((p) => p.trim().length > 0)) {
+      tokensList.push(parts.map((p) => p.trim()));
     }
   }
 
-  return processRawCenterRows(rawRows, selectedCategory, existingStations);
+  const structuredRows = parseTableRowsFromTokens(tokensList);
+  return processRawCenterRows(structuredRows, selectedCategory, existingStations);
 }
 
 /**

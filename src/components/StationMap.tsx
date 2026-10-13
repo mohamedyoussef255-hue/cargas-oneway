@@ -17,6 +17,61 @@ import {
   ExternalLink,
 } from 'lucide-react';
 
+export type MapSystemId = 'satellite' | 'voyager' | 'osm' | 'dark' | 'topo' | 'hot';
+
+export interface MapSystemOption {
+  id: MapSystemId;
+  name: string;
+  badge: string;
+  icon: string;
+  description: string;
+}
+
+export const MAP_SYSTEMS: MapSystemOption[] = [
+  {
+    id: 'satellite',
+    name: 'أقمار صناعية حقيقية',
+    badge: 'Satellite',
+    icon: '🛰️',
+    description: 'صور فضائية حقيقية من أقمار Esri مع أسماء الشوارع والمدن',
+  },
+  {
+    id: 'voyager',
+    name: 'ملاحة عصرية واضحة',
+    badge: 'Voyager',
+    icon: '🧭',
+    description: 'خريطة ناصعة وفائقة الوضوح مناسبة للقيادة والبحث النهاري',
+  },
+  {
+    id: 'osm',
+    name: 'شوارع كلاسيك OSM',
+    badge: 'OpenStreetMap',
+    icon: '🗺️',
+    description: 'قاعدة بيانات الشوارع والمباني العالمية القياسية 100% مفتوحة',
+  },
+  {
+    id: 'dark',
+    name: 'رؤية ليلية داكنة',
+    badge: 'Dark Mode',
+    icon: '🌙',
+    description: 'خلفية داكنة مريحة للعين في القيادة ليلاً تبرز المحطات كأضواء',
+  },
+  {
+    id: 'topo',
+    name: 'تضاريس وطبوغرافيا',
+    badge: 'Topographic',
+    icon: '⛰️',
+    description: 'تضاريس الأرض والمرتفعات الطبيعية بدقة طبوغرافية',
+  },
+  {
+    id: 'hot',
+    name: 'شبكة نقل وطرق حيوية',
+    badge: 'Transit',
+    icon: '🚦',
+    description: 'إبراز المحاور والطرق السريعة والميادين للتنقل السريع',
+  },
+];
+
 interface StationMapProps {
   onStationSelect?: (station: Station) => void;
   className?: string;
@@ -41,10 +96,28 @@ export const StationMap: React.FC<StationMapProps> = ({ onStationSelect, classNa
     findClosestStation,
     theme,
     settings,
+    setIsAdminOpen,
   } = useApp();
 
-  const [mapType, setMapType] = useState<'osm' | 'voyager' | 'dark'>('voyager');
+  const [mapSystem, setMapSystem] = useState<MapSystemId>(() => {
+    const saved = localStorage.getItem('cargas_preferred_map_system');
+    if (saved && ['satellite', 'voyager', 'osm', 'dark', 'topo', 'hot'].includes(saved)) {
+      return saved as MapSystemId;
+    }
+    if (settings.activeMapSystem) return settings.activeMapSystem;
+    return theme === 'dark' ? 'dark' : 'voyager';
+  });
+
+  const [showSystemsMenu, setShowSystemsMenu] = useState(false);
   const [isPickingLocation, setIsPickingLocation] = useState(false);
+
+  // تحديث النظام الليلي تلقائياً عند تغيير الثيم العام إن لم يكن المستخدم اختار قمراً صناعياً أو نمطاً مخصصاً
+  useEffect(() => {
+    const saved = localStorage.getItem('cargas_preferred_map_system');
+    if (!saved || saved === 'dark' || saved === 'voyager') {
+      setMapSystem(theme === 'dark' ? 'dark' : 'voyager');
+    }
+  }, [theme]);
 
   // إنشاء الخريطة عند تحميل الصفحة
   useEffect(() => {
@@ -77,34 +150,83 @@ export const StationMap: React.FC<StationMapProps> = ({ onStationSelect, classNa
     };
   }, []);
 
-  // تغيير نوع خريطة الخلفية (Tiles)
+  // تغيير نوع خريطة الخلفية (Tiles) بناءً على جميع أنظمة الخريطة ومفتاح الـ API
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
 
-    // مسح الطبقات السابقة
+    // مسح الطبقات السابقة (TileLayers)
     map.eachLayer((layer) => {
       if (layer instanceof L.TileLayer) {
         map.removeLayer(layer);
       }
     });
 
-    // خريطة OpenStreetMap (OSM) الرسمية 100% مجاناً وبدون أي مفتاح إطلاقاً
-    const tileUrl =
-      theme === 'dark'
-        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-        : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-    const attribution =
-      theme === 'dark'
-        ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; CARTO'
-        : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+    if (mapSystem === 'satellite') {
+      // 1. نظام الأقمار الصناعية الفضائية Esri World Imagery عالي الدقة (صور حقيقية 100% مجاناً)
+      const satLayer = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{x}/{y}',
+        {
+          attribution: 'Tiles &copy; Esri &mdash; World Imagery Community',
+          maxZoom: 19,
+        }
+      );
+      satLayer.addTo(map);
 
-    L.tileLayer(tileUrl, {
-      attribution,
-      maxZoom: 19,
-      subdomains: theme === 'dark' ? 'abcd' : '',
-    }).addTo(map);
-  }, [theme]);
+      // طبقة حدود وأسماء المدن والشوارع والمعالم فوق القمر الصناعي لسهولة القراءة باللغة العربية
+      const labelsLayer = L.tileLayer(
+        'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{x}/{y}',
+        {
+          maxZoom: 19,
+          opacity: 0.9,
+        }
+      );
+      labelsLayer.addTo(map);
+    } else if (mapSystem === 'osm') {
+      // 2. نظام خريطة OpenStreetMap القياسية (الشوارع والمباني بالتفصيل)
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19,
+      }).addTo(map);
+    } else if (mapSystem === 'dark') {
+      // 3. نظام الرؤية الليلية الداكن Carto Dark Matter
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; CARTO',
+        maxZoom: 19,
+        subdomains: 'abcd',
+      }).addTo(map);
+    } else if (mapSystem === 'topo') {
+      // 4. نظام التضاريس والطبوغرافيا OpenTopoMap
+      L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+        attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, SRTM | Style: &copy; OpenTopoMap',
+        maxZoom: 17,
+        subdomains: 'abc',
+      }).addTo(map);
+    } else if (mapSystem === 'hot') {
+      // 5. نظام الشوارع الحيوية والنقل Humanitarian OSM
+      L.tileLayer('https://tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, Humanitarian map style',
+        maxZoom: 19,
+      }).addTo(map);
+    } else if (settings.customTileUrl) {
+      // 6. خادم مخصص للبلاطات أو مفتاح API خارجي
+      const tileUrl =
+        settings.customTileUrl.includes('{key}') && settings.mapApiKey
+          ? settings.customTileUrl.replace('{key}', settings.mapApiKey)
+          : settings.customTileUrl;
+      L.tileLayer(tileUrl, {
+        attribution: 'Custom Map Provider',
+        maxZoom: 19,
+      }).addTo(map);
+    } else {
+      // الافتراضي: Carto Voyager الملاحة العصرية الفاتحة والواضحة جداً
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; CARTO',
+        maxZoom: 19,
+        subdomains: 'abcd',
+      }).addTo(map);
+    }
+  }, [mapSystem, settings.customTileUrl, settings.mapApiKey]);
 
   // الاستماع للنقر على الخريطة لتحديد الموقع يدوياً
   useEffect(() => {
@@ -513,13 +635,94 @@ export const StationMap: React.FC<StationMapProps> = ({ onStationSelect, classNa
         )}
       </div>
 
-      {/* شارة توثيق خريطة OpenStreetMap الرسمية بدون مفتاح */}
-      <div className="absolute top-4 left-4 z-10 hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/95 dark:bg-slate-900/95 backdrop-blur border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold shadow-md">
-        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-        <span>خريطة OpenStreetMap (OSM) - بدون مفتاح</span>
-      </div>
+      {/* محول ومستكشف أنظمة الخريطة الشامل (Satellite, OSM, Voyager, Dark, Topo, HOT) ومفتاح API */}
+      {settings.showMapTypeSwitcher && (
+        <div className="absolute top-4 left-4 z-20">
+          <div className="relative">
+            <button
+              onClick={() => setShowSystemsMenu(!showSystemsMenu)}
+              className="flex items-center gap-2 px-3 py-2 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md text-slate-800 dark:text-white rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition text-xs font-bold active:scale-95 cursor-pointer"
+              title="تغيير نظام الخريطة (أقمار صناعية، OSM، ملاحة، رؤية ليلية، تضاريس)"
+            >
+              <Layers className="w-4 h-4 text-blue-600 shrink-0" />
+              <span className="hidden sm:inline">أنظمة الخريطة</span>
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/80 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-[11px] font-black">
+                <span>{MAP_SYSTEMS.find((s) => s.id === mapSystem)?.icon}</span>
+                <span>{MAP_SYSTEMS.find((s) => s.id === mapSystem)?.name}</span>
+              </span>
+            </button>
 
-      {/* دلالات الألوان في الركن السفلي */}
+            {/* القائمة المنسدلة لجميع أنظمة الخريطة */}
+            {showSystemsMenu && (
+              <div
+                className="absolute top-full left-0 mt-2 w-72 sm:w-80 bg-white/98 dark:bg-slate-900/98 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 p-2 text-right z-30 animate-in fade-in zoom-in-95 duration-150"
+                dir="rtl"
+              >
+                <div className="p-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <span className="font-extrabold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-blue-600" />
+                    <span>أنظمة الخريطة المتاحة (6 أنظمة)</span>
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full">
+                    مفتوح 100% مجاناً
+                  </span>
+                </div>
+
+                <div className="py-1 space-y-1">
+                  {MAP_SYSTEMS.map((sys) => {
+                    const isCurrent = mapSystem === sys.id;
+                    return (
+                      <button
+                        key={sys.id}
+                        onClick={() => {
+                          setMapSystem(sys.id);
+                          localStorage.setItem('cargas_preferred_map_system', sys.id);
+                          setShowSystemsMenu(false);
+                        }}
+                        className={`w-full flex items-start gap-2.5 p-2 rounded-xl text-right transition cursor-pointer ${
+                          isCurrent
+                            ? 'bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-950 dark:text-blue-100'
+                            : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200'
+                        }`}
+                      >
+                        <span className="text-xl shrink-0 mt-0.5">{sys.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-bold text-xs">{sys.name}</span>
+                            {isCurrent && (
+                              <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/60 px-1.5 py-0.2 rounded">
+                                النشط ✓
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
+                            {sys.description}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* زر الإعدادات ومفتاح API */}
+                <div className="mt-1 pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                  <button
+                    onClick={() => {
+                      setShowSystemsMenu(false);
+                      setIsAdminOpen(true);
+                    }}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 px-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition cursor-pointer"
+                  >
+                    <span>🔑</span>
+                    <span>ضبط أو إضافة مفتاح API للخرائط</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="absolute bottom-4 right-4 z-10 hidden md:flex items-center gap-2 bg-white/90 dark:bg-slate-800/90 backdrop-blur px-3 py-1.5 rounded-xl text-[11px] shadow border border-slate-200 dark:border-slate-700">
         <span className="flex items-center gap-1 text-emerald-700 font-semibold">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span> تموين غاز

@@ -39,9 +39,11 @@ import {
   MessageSquare,
   Send,
   FileSpreadsheet,
+  Map,
 } from 'lucide-react';
 import { AdminThemeColorsTab } from './admin/AdminThemeColorsTab';
 import { AdminExcelImportTab } from './admin/AdminExcelImportTab';
+import { AdminMapApiTab } from './admin/AdminMapApiTab';
 
 export const AdminModal: React.FC = () => {
   const {
@@ -76,6 +78,7 @@ export const AdminModal: React.FC = () => {
     | 'stations_crud'
     | 'excel_import'
     | 'theme_colors'
+    | 'map_api_settings'
     | 'kml_upload'
     | 'station_logos'
     | 'text_control'
@@ -604,6 +607,24 @@ export const AdminModal: React.FC = () => {
               <span>بنتونة الألوان والنهاري/الليلي</span>
             </button>
 
+            {/* 3.5. أنظمة الخرائط ومفتاح API */}
+            <button
+              onClick={() => setActiveTab('map_api_settings')}
+              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl font-black text-xs sm:text-sm transition-all duration-200 cursor-pointer shrink-0 ${
+                activeTab === 'map_api_settings'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30 ring-2 ring-blue-400 scale-[1.02]'
+                  : 'text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-slate-700/80 border border-blue-300 dark:border-blue-700'
+              }`}
+            >
+              <span className={`p-1 rounded-lg ${activeTab === 'map_api_settings' ? 'bg-white/20' : 'bg-blue-500/20 text-blue-600 dark:text-blue-400'}`}>
+                <Map className="w-4 h-4" />
+              </span>
+              <span>أنظمة الخرائط ومفتاح API</span>
+              <span className="text-[10px] bg-blue-500/20 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-md font-bold">
+                6 أنظمة + مفتاح
+              </span>
+            </button>
+
             {/* 4. استيراد ملفات KMZ */}
             <button
               onClick={() => setActiveTab('kml_upload')}
@@ -695,6 +716,16 @@ export const AdminModal: React.FC = () => {
             />
           )}
 
+          {/* ===================== التبويب: أنظمة الخرائط ومفتاح API ===================== */}
+          {activeTab === 'map_api_settings' && (
+            <AdminMapApiTab
+              settings={settings}
+              updateSettings={updateSettings}
+              showToast={showToast}
+              onSaveAll={handleSaveAllChanges}
+            />
+          )}
+
           {/* ===================== التبويب 1: إدارة المحطات (CRUD وحذف المحطات) ===================== */}
           {activeTab === 'stations_crud' && (
             <div className="space-y-4">
@@ -753,6 +784,13 @@ export const AdminModal: React.FC = () => {
                   >
                     <Upload className="w-3.5 h-3.5" />
                     <span>رفع ملف KMZ</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('map_api_settings')}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs shadow-sm transition active:scale-95 cursor-pointer"
+                  >
+                    <Map className="w-3.5 h-3.5" />
+                    <span>أنظمة الخرائط ومفتاح API</span>
                   </button>
                 </div>
               </div>

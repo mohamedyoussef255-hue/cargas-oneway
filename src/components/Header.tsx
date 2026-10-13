@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { DEFAULT_CARGAS_LOGO } from '../utils/cargasLogo';
 import {
   Flame,
   Moon,
@@ -53,17 +54,11 @@ export const Header: React.FC = () => {
               className="relative cursor-pointer group transition-transform active:scale-90"
               title="انقر هنا 5 مرات لفتح لوحة تحكم مدير النظام"
             >
-              {settings.logoUrl ? (
-                <img
-                  src={settings.logoUrl}
-                  alt={settings.appName}
-                  className="w-11 h-11 object-contain rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 bg-white p-1"
-                />
-              ) : (
-                <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center font-black text-xl shadow-md shadow-emerald-600/20 group-hover:shadow-emerald-600/30 transition">
-                  <Flame className="w-6 h-6 animate-pulse" />
-                </div>
-              )}
+              <img
+                src={settings.logoUrl || DEFAULT_CARGAS_LOGO}
+                alt={settings.appName}
+                className="w-11 h-11 object-contain rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 bg-white p-1"
+              />
               {logoClickCount > 0 && (
                 <span className="absolute -bottom-1 -left-1 w-5 h-5 rounded-full bg-amber-500 text-white text-[10px] font-black flex items-center justify-center shadow animate-bounce">
                   {5 - logoClickCount}

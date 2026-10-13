@@ -124,12 +124,14 @@ export function applyCargasNetworkRules(stations: Station[]): Station[] {
     const normalizedName = key.split('___')[0];
     const primary = group[0]; // المحطة الأساسية
 
-    // دمج الخدمات: تموين فقط وعدم وجود زيوت في المحطات
+    // دمج الخدمات بدقة لشبكة كارجاس
     const mergedServices = {
-      cngRefuel: true,        // جميع المحطات تموين فقط
-      bpOilCenter: false,     // عدم وجود زيوت في المحطات (التموين فقط بناء على طلب المستخدم)
+      cngRefuel: true,        // جميع محطات كارجاس تموين غاز أساسي
+      bpOilCenter: group.some((s) => s.services?.bpOilCenter),
+      canopyOilSales: group.some((s) => s.services?.canopyOilSales),
       conversionMaintenance: group.some((s) => s.services?.conversionMaintenance),
       cylinderTesting: group.some((s) => s.services?.cylinderTesting),
+      cylinderTestingUpcoming: group.some((s) => s.services?.cylinderTestingUpcoming),
       carWash: group.some((s) => s.services?.carWash),
       convenienceStore: group.some((s) => s.services?.convenienceStore),
       evCharging: group.some((s) => s.services?.evCharging),

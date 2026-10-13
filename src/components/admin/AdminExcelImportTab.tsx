@@ -5,6 +5,7 @@ import {
   CenterCategory,
   parseExcelSheet,
   parseWordDocument,
+  parsePdfDocument,
   parsePdfOrTextContent,
   applyImportedCentersToStations,
   generateSampleExcelTemplate,
@@ -48,8 +49,8 @@ export const AdminExcelImportTab: React.FC<AdminExcelImportTabProps> = ({
   // حالة نوع النشاط المستهدف
   const [selectedCategory, setSelectedCategory] = useState<CenterCategory>('auto');
 
-  // خيار التسجيل العام الافتراضي
-  const [globalActionType, setGlobalActionType] = useState<'standalone' | 'merge'>('standalone');
+  // خيار التسجيل العام الافتراضي (الدمج التلقائي مع المحطات القائمة بالخريطة)
+  const [globalActionType, setGlobalActionType] = useState<'standalone' | 'merge'>('merge');
 
   // المراكز المستخرجة
   const [extractedCenters, setExtractedCenters] = useState<ExtractedCenter[]>([]);
@@ -68,7 +69,7 @@ export const AdminExcelImportTab: React.FC<AdminExcelImportTabProps> = ({
   const [showPasteBox, setShowPasteBox] = useState(false);
   const [pastedText, setPastedText] = useState('');
 
-  // معالجة رفع الملف (إكسيل أو PDF)
+  // معالجة رفع الملف (Word / Excel / PDF / TXT)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -80,13 +81,16 @@ export const AdminExcelImportTab: React.FC<AdminExcelImportTabProps> = ({
       const fileName = file.name.toLowerCase();
       let centers: ExtractedCenter[] = [];
 
-      if (fileName.endsWith('.docx')) {
+      if (fileName.endsWith('.docx') || fileName.endsWith('.doc')) {
         const buffer = await file.arrayBuffer();
         centers = await parseWordDocument(buffer, selectedCategory, stations);
       } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) {
         const buffer = await file.arrayBuffer();
         centers = parseExcelSheet(buffer, selectedCategory, stations);
-      } else if (fileName.endsWith('.pdf') || fileName.endsWith('.txt')) {
+      } else if (fileName.endsWith('.pdf')) {
+        const buffer = await file.arrayBuffer();
+        centers = await parsePdfDocument(buffer, selectedCategory, stations);
+      } else if (fileName.endsWith('.txt')) {
         const text = await file.text();
         centers = parsePdfOrTextContent(text, selectedCategory, stations);
       } else {
@@ -94,14 +98,18 @@ export const AdminExcelImportTab: React.FC<AdminExcelImportTabProps> = ({
         try {
           centers = await parseWordDocument(buffer, selectedCategory, stations);
         } catch {
-          centers = parseExcelSheet(buffer, selectedCategory, stations);
+          try {
+            centers = await parsePdfDocument(buffer, selectedCategory, stations);
+          } catch {
+            centers = parseExcelSheet(buffer, selectedCategory, stations);
+          }
         }
       }
 
-      // تطبيق خيار التسجيل العام الافتراضي
+      // توقيع ودمج المراكز تلقائياً على المحطات المطابقة بالخريطة
       const updated: ExtractedCenter[] = centers.map((c) => ({
         ...c,
-        actionType: (globalActionType === 'merge' && c.matchedStationId ? 'merge' : 'standalone') as 'standalone' | 'merge',
+        actionType: (c.matchedStationId ? 'merge' : 'standalone') as 'standalone' | 'merge',
       }));
 
       setExtractedCenters(updated);

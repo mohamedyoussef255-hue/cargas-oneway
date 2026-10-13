@@ -52,7 +52,7 @@ interface AppContextType {
 const DEFAULT_SETTINGS: AppSettings = {
   appName: 'كارجاس وخدمات الغاز - محطاتك',
   appSubtitle: 'المنظومة الذكية لمحطات الغاز الطبيعي، زيوت BP، الصيانة وفحص الأسطوانات',
-  logoUrl: null,
+  logoUrl: DEFAULT_CARGAS_LOGO,
   defaultStationLogoUrl: DEFAULT_CARGAS_LOGO,
   adminPin: '0000',
 
@@ -75,7 +75,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   showMapQuickCylinder: true,
   showMapQuickBp: true,
   showMapQuickConversion: true,
-  showMapTypeSwitcher: false,
+  showMapTypeSwitcher: true,
   showStationCards: true,
 
   // النصوص والعناوين
@@ -109,6 +109,10 @@ const DEFAULT_SETTINGS: AppSettings = {
 
   defaultMapCenter: [30.0444, 31.2357], // القاهرة
   defaultZoom: 11,
+  mapApiKey: '',
+  mapProvider: 'free_osm_satellite',
+  customTileUrl: '',
+  activeMapSystem: 'voyager',
 };
 
 const STATIONS_STORAGE_KEY = 'ezouti_gas_stations_v2';
@@ -170,6 +174,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return {
           ...DEFAULT_SETTINGS,
           ...parsed,
+          logoUrl: parsed.logoUrl || DEFAULT_CARGAS_LOGO,
+          defaultStationLogoUrl: parsed.defaultStationLogoUrl || DEFAULT_CARGAS_LOGO,
           // إلغاء معين افتراضياً بناء على أمر المستخدم "الغي معين"
           enableMoeen: parsed.enableMoeen === true && parsed._explicitAdminMoeen ? true : false,
         };
