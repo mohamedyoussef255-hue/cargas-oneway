@@ -4,7 +4,14 @@ import { calculateHaversineDistance } from '../utils/geo';
 import { applyCargasNetworkRules, normalizeCargasStationName } from '../utils/cargasRules';
 import { INITIAL_STATIONS } from '../data/initialStations';
 import { applyThemeToDocument } from '../utils/themePalettes';
-import { DEFAULT_CARGAS_LOGO } from '../utils/cargasLogo';
+import { DEFAULT_CARGAS_LOGO, APP_PRIMARY_LOGO, STATION_NETWORK_LOGO } from '../utils/cargasLogo';
+import { normalizeArabicText } from '../utils/speech';
+import {
+  saveStationsToIDB,
+  getStationsFromIDB,
+  saveSettingsToIDB,
+  getSettingsFromIDB,
+} from '../utils/idbStorage';
 
 interface AppContextType {
   stations: Station[];
@@ -50,10 +57,10 @@ interface AppContextType {
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
-  appName: 'كارجاس وخدمات الغاز - محطاتك',
-  appSubtitle: 'المنظومة الذكية لمحطات الغاز الطبيعي، زيوت BP، الصيانة وفحص الأسطوانات',
-  logoUrl: DEFAULT_CARGAS_LOGO,
-  defaultStationLogoUrl: DEFAULT_CARGAS_LOGO,
+  appName: 'أقرب محطة كارجاس',
+  appSubtitle: 'المنظومة الذكية لتحديد أقرب محطة غاز طبيعي، صيانة، زيوت وفحص أسطوانات',
+  logoUrl: APP_PRIMARY_LOGO,
+  defaultStationLogoUrl: STATION_NETWORK_LOGO,
   adminPin: '0000',
 
   // إعدادات المساعد مُعين (تم إلغاؤه وإخفاؤه بناءً على طلبك مع إمكانية التفعيل من لوحة المدير)
@@ -174,8 +181,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return {
           ...DEFAULT_SETTINGS,
           ...parsed,
-          logoUrl: parsed.logoUrl || DEFAULT_CARGAS_LOGO,
-          defaultStationLogoUrl: parsed.defaultStationLogoUrl || DEFAULT_CARGAS_LOGO,
+          logoUrl: parsed.logoUrl || APP_PRIMARY_LOGO,
+          defaultStationLogoUrl: parsed.defaultStationLogoUrl || STATION_NETWORK_LOGO,
           // إلغاء معين افتراضياً بناء على أمر المستخدم "الغي معين"
           enableMoeen: parsed.enableMoeen === true && parsed._explicitAdminMoeen ? true : false,
         };
@@ -183,6 +190,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {}
     return DEFAULT_SETTINGS;
   });
+
+  // استرجاع البيانات والنسخ الاحتياطية من التخزين العميق IndexedDB في حال تم تفريغ الكاش
+  useEffect(() => {
+    let isMounted = true;
+    async function restoreFromIDB() {
+      try {
+        const [idbStations, idbSettings] = await Promise.all([
+          getStationsFromIDB(),
+          getSettingsFromIDB(),
+        ]);
+        if (!isMounted) return;
+
+        if (idbStations && idbStations.length > 0) {
+          setStations((current) => {
+            // إذا كانت الذاكرة المؤقتة فارغة أو أقل من بيانات IndexedDB المعتمدة
+            if (current.length === 0 || (current === INITIAL_STATIONS && idbStations.length > 0)) {
+              return idbStations;
+            }
+            return current;
+          });
+        }
+
+        if (idbSettings) {
+          setSettings((current) => ({
+            ...current,
+            ...idbSettings,
+            logoUrl: idbSettings.logoUrl || current.logoUrl || APP_PRIMARY_LOGO,
+            defaultStationLogoUrl:
+              idbSettings.defaultStationLogoUrl || current.defaultStationLogoUrl || STATION_NETWORK_LOGO,
+          }));
+        }
+      } catch (err) {
+        console.warn('IDB restore error:', err);
+      }
+    }
+    restoreFromIDB();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // 3. الثيم (النهاري والليلي)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -235,19 +282,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // 8. المساعد "مُعين"
   const [isMoeenOpen, setIsMoeenOpen] = useState<boolean>(false);
 
-  // حفظ المحطات في LocalStorage مع تعيين علم بيانات المستخدم المعتمدة لمنع استدعاء البيانات الافتراضية
+  // حفظ المحطات في التخزين المزدوج (LocalStorage + IndexedDB الدائم)
   useEffect(() => {
     try {
       localStorage.setItem(USER_DATA_FLAG_KEY, 'true');
       localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(stations));
     } catch {}
+    saveStationsToIDB(stations);
   }, [stations]);
 
-  // حفظ الإعدادات
+  // حفظ الإعدادات في التخزين المزدوج (LocalStorage + IndexedDB الدائم)
   useEffect(() => {
     try {
       localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
     } catch {}
+    saveSettingsToIDB(settings);
   }, [settings]);
 
   // تطبيق بنتونة الألوان على كامل عناصر وصفحات التطبيق فور تغييرها
@@ -595,36 +644,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  // حفظ فوري لكافة التعديلات والتغييرات في قاعدة البيانات المحلية واعتمادها نهائياً
+  // حفظ فوري لكافة التعديلات والتغييرات في قاعدة البيانات المحلية والتخزين الدائم واعتمادها نهائياً
   const saveAllDataNow = (): boolean => {
     try {
       localStorage.setItem(USER_DATA_FLAG_KEY, 'true');
       localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(stations));
       localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-      return true;
-    } catch {
-      return false;
+    } catch (e) {
+      console.warn('LocalStorage error, relying on IndexedDB:', e);
     }
+    saveStationsToIDB(stations);
+    saveSettingsToIDB(settings);
+    return true;
   };
 
-  // تطبيق لوجو المحطة الجديد المرفوع من الكمبيوتر وتعميمه على كافة المحطات أو المحطات المحددة
+  // تطبيق لوجو المحطة الجديد المرفوع وتعميمه على كافة المحطات أو المحطات المحددة
   const applyStationLogo = (logoUrl: string, targetStationIds?: string[]) => {
     if (!targetStationIds || targetStationIds.length === 0) {
-      // تعميم على كافة المحطات
+      // تعميم على كافة المحطات: يتم تحديث اللوجو الافتراضي العام في الإعدادات
+      // وتفريغ الحقول الفردية لترث اللوجو تلقائياً دون تضخيم حجم البيانات أو كسر حد التخزين
+      updateSettings({ defaultStationLogoUrl: logoUrl });
       setStations((prev) => {
         const updated = prev.map((s) => ({
           ...s,
-          logoUrl,
+          logoUrl: undefined, // يرث تلقائياً settings.defaultStationLogoUrl
           updatedAt: new Date().toISOString(),
         }));
         try {
           localStorage.setItem(USER_DATA_FLAG_KEY, 'true');
           localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(updated));
         } catch {}
+        saveStationsToIDB(updated);
         return updated;
       });
-      // وحفظه كلوجو افتراضي عام لأي محطات قادمة
-      updateSettings({ defaultStationLogoUrl: logoUrl });
     } else {
       // تطبيق على المحطات المحددة فقط
       const idSet = new Set(targetStationIds);
@@ -636,6 +688,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           localStorage.setItem(USER_DATA_FLAG_KEY, 'true');
           localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(updated));
         } catch {}
+        saveStationsToIDB(updated);
         return updated;
       });
     }
@@ -653,6 +706,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           localStorage.setItem(USER_DATA_FLAG_KEY, 'true');
           localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(updated));
         } catch {}
+        saveStationsToIDB(updated);
         return updated;
       });
       updateSettings({ defaultStationLogoUrl: null });
@@ -664,6 +718,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           localStorage.setItem(USER_DATA_FLAG_KEY, 'true');
           localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(updated));
         } catch {}
+        saveStationsToIDB(updated);
         return updated;
       });
     }
@@ -671,24 +726,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // استيراد واعتماد المحطات المرفوعة نهائياً في التطبيق
   const importStations = (newStations: Station[], mode: 'append' | 'replace') => {
-    const stationsWithLogo = newStations.map((s) => ({
+    const sanitized = newStations.map((s) => ({
       ...s,
-      logoUrl: s.logoUrl || settings.defaultStationLogoUrl || undefined,
+      company: s.company || 'كارجاس - Cargas',
     }));
 
     if (mode === 'replace') {
-      setStations(stationsWithLogo);
+      setStations(sanitized);
       try {
         localStorage.setItem(USER_DATA_FLAG_KEY, 'true');
-        localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(stationsWithLogo));
+        localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(sanitized));
       } catch {}
+      saveStationsToIDB(sanitized);
     } else {
       setStations((prev) => {
-        const merged = [...prev, ...stationsWithLogo];
+        const merged = [...prev, ...sanitized];
         try {
           localStorage.setItem(USER_DATA_FLAG_KEY, 'true');
           localStorage.setItem(STATIONS_STORAGE_KEY, JSON.stringify(merged));
         } catch {}
+        saveStationsToIDB(merged);
         return merged;
       });
     }
@@ -710,16 +767,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return { ...station, distance };
       })
       .filter((station) => {
-        // فلتر البحث النصي
+        // فلتر البحث النصي الذكي بالتطبيع العربي
         if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase().trim();
-          const matchName = station.name.toLowerCase().includes(q);
-          const matchAddress = station.address.toLowerCase().includes(q);
-          const matchGov = station.governorate.toLowerCase().includes(q);
-          const matchCity = station.city ? station.city.toLowerCase().includes(q) : false;
-          const matchCompany = station.company.toLowerCase().includes(q);
-          if (!matchName && !matchAddress && !matchGov && !matchCity && !matchCompany) {
-            return false;
+          const normQ = normalizeArabicText(searchQuery);
+          const rawQ = searchQuery.toLowerCase().trim();
+
+          const normName = normalizeArabicText(station.name);
+          const normAddress = normalizeArabicText(station.address);
+          const normGov = normalizeArabicText(station.governorate);
+          const normCity = normalizeArabicText(station.city || '');
+          const normCompany = normalizeArabicText(station.company);
+          const normNotes = normalizeArabicText(station.notes || '');
+
+          const matchesNorm =
+            normName.includes(normQ) ||
+            normAddress.includes(normQ) ||
+            normGov.includes(normQ) ||
+            normCity.includes(normQ) ||
+            normCompany.includes(normQ) ||
+            normNotes.includes(normQ);
+
+          const matchesRaw =
+            station.name.toLowerCase().includes(rawQ) ||
+            station.address.toLowerCase().includes(rawQ) ||
+            station.governorate.toLowerCase().includes(rawQ);
+
+          if (!matchesNorm && !matchesRaw) {
+            // فحص الكلمات المفردة إذا كانت جملة بحث مركبة
+            const words = normQ.split(' ').filter((w) => w.length >= 2 && !['محطة', 'محطه', 'كارجاس'].includes(w));
+            const hasMatchingWord =
+              words.length > 0 &&
+              words.some((w) =>
+                normName.includes(w) ||
+                normAddress.includes(w) ||
+                normGov.includes(w) ||
+                normCity.includes(w)
+              );
+
+            if (!hasMatchingWord) {
+              return false;
+            }
           }
         }
 

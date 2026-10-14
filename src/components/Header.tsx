@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { DEFAULT_CARGAS_LOGO } from '../utils/cargasLogo';
+import { DEFAULT_CARGAS_LOGO, APP_PRIMARY_LOGO } from '../utils/cargasLogo';
 import {
   Flame,
   Moon,
@@ -55,7 +55,7 @@ export const Header: React.FC = () => {
               title="انقر هنا 5 مرات لفتح لوحة تحكم مدير النظام"
             >
               <img
-                src={settings.logoUrl || DEFAULT_CARGAS_LOGO}
+                src={settings.logoUrl || APP_PRIMARY_LOGO || DEFAULT_CARGAS_LOGO}
                 alt={settings.appName}
                 className="w-11 h-11 object-contain rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 bg-white p-1"
               />

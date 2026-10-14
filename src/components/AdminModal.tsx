@@ -44,6 +44,7 @@ import {
 import { AdminThemeColorsTab } from './admin/AdminThemeColorsTab';
 import { AdminExcelImportTab } from './admin/AdminExcelImportTab';
 import { AdminMapApiTab } from './admin/AdminMapApiTab';
+import { saveUploadedKmzFileBackup } from '../utils/idbStorage';
 
 export const AdminModal: React.FC = () => {
   const {
@@ -304,13 +305,15 @@ export const AdminModal: React.FC = () => {
 
     if (result.success && result.stations.length > 0) {
       importStations(result.stations, importMode);
+      saveUploadedKmzFileBackup(file.name, result.stations.length, result.stations);
+      saveAllDataNow();
       setImportStatus({
         success: true,
-        message: `تم بنجاح استخراج ${result.stations.length} محطة من ملف "${file.name}" وتحديث الخريطة فوراً!`,
+        message: `تم بنجاح استخراج ${result.stations.length} محطة من ملف "${file.name}" وتثبيتها دائماً في قاعدة البيانات وتحديث الخريطة فوراً!`,
         count: result.stations.length,
         errors: result.errors,
       });
-      showToast(`تم استيراد ${result.stations.length} محطة بنجاح!`);
+      showToast(`تم استيراد وتثبيت ${result.stations.length} محطة دائماً بنجاح!`);
     } else {
       setImportStatus({
         success: false,
@@ -321,6 +324,43 @@ export const AdminModal: React.FC = () => {
 
     setIsProcessingFile(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // تصدير وتنزيل ملف initialStations.ts ككود جاهز للمشروع لدمجه نهائياً قبل النشر على Vercel
+  const handleDownloadCodeBundle = () => {
+    if (stations.length === 0) {
+      showToast('لا توجد محطات لتصديرها حالياً');
+      return;
+    }
+    const fileContent = `import { Station } from '../types/station';
+import { applyCargasNetworkRules } from '../utils/cargasRules';
+
+/**
+ * قاعدة البيانات الرسمية والمعتمدة لشبكة محطات ومراكز كارجاس
+ * تم تصديرها واعتمادها مباشرة من لوحة تحكم مدير النظام
+ * عدد المحطات: ${stations.length} محطة
+ * تاريخ التصدير والاعتماد: ${new Date().toLocaleString('ar-EG')}
+ */
+const RAW_INITIAL_STATIONS: Station[] = ${JSON.stringify(stations, null, 2)};
+
+export const INITIAL_STATIONS: Station[] = applyCargasNetworkRules(RAW_INITIAL_STATIONS);
+`;
+
+    const blob = new Blob([fileContent], { type: 'text/typescript;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'initialStations.ts';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('تم تنزيل ملف initialStations.ts المعتمد للمشروع بنجاح!');
+  };
+
+  // نسخ كود المحطات للحافظة
+  const handleCopyStationsCode = () => {
+    const code = JSON.stringify(stations, null, 2);
+    navigator.clipboard.writeText(code);
+    showToast('تم نسخ كود بيانات المحطات (${stations.length} محطة) إلى الحافظة بنجاح!');
   };
 
   // تصدير المحطات الحالية لـ KML
@@ -372,13 +412,15 @@ export const AdminModal: React.FC = () => {
     }
 
     setStationLogoSuccess(true);
+    saveAllDataNow();
     setTimeout(() => setStationLogoSuccess(false), 3000);
-    showToast('تم تعميم اللوجو على الخريطة بنجاح!');
+    showToast('تم تعميم وتثبيت اللوجو على الخريطة وقاعدة البيانات بنجاح!');
   };
 
   // إزالة لوجو المحطات
   const handleClearStationLogo = () => {
     clearStationLogo(logoTargetMode === 'selected' ? selectedStationIdsForLogo : undefined);
+    saveAllDataNow();
     setStationLogoPreview(null);
     showToast('تمت إزالة لوجو المحطات واستعادة الأيقونات الافتراضية.');
   };
@@ -1040,6 +1082,60 @@ export const AdminModal: React.FC = () => {
                   )}
                 </div>
               )}
+
+              {/* قسم التثبيت الدائم والاعتماد لمشروع Vercel */}
+              <div className="bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-blue-500/10 border-2 border-emerald-500/40 p-5 rounded-3xl space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-black shadow-md shadow-emerald-600/30">
+                      <Save className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                        <span>التثبيت الدائم للمحطات واللوجو</span>
+                        <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-700">
+                          مثبت تلقائياً ومحمي
+                        </span>
+                      </h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        كل محطة أو ملف KMZ أو لوجو ترفعه يُحفظ فوراً في التخزين الدائم (IndexedDB + LocalStorage). يمكنك أيضاً تنزيل ملف الكود الدائم لرفعه على Vercel.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black px-3 py-1 bg-white dark:bg-slate-800 border border-emerald-500/30 rounded-xl text-emerald-700 dark:text-emerald-400 shadow-xs">
+                      {stations.length} محطة معتمدة
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                  <button
+                    onClick={handleSaveAllChanges}
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-md shadow-emerald-600/25 transition cursor-pointer"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    <span>تثبيت وحفظ دائم الآن</span>
+                  </button>
+
+                  <button
+                    onClick={handleDownloadCodeBundle}
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl shadow-md shadow-blue-600/25 transition cursor-pointer"
+                    title="تنزيل ملف initialStations.ts لرفعه مع سورس كود التطبيق على Vercel"
+                  >
+                    <FileCode className="w-4 h-4" />
+                    <span>تنزيل كود Vercel الدائم</span>
+                  </button>
+
+                  <button
+                    onClick={handleCopyStationsCode}
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white dark:bg-slate-700 dark:hover:bg-slate-600 font-bold text-xs rounded-xl shadow transition cursor-pointer"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>نسخ كود المحطات (JSON)</span>
+                  </button>
+                </div>
+              </div>
 
               {/* زر مسح البيانات وتصفير المحطات */}
               <div className="bg-slate-50 dark:bg-slate-700/30 p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 border border-slate-200 dark:border-slate-700">

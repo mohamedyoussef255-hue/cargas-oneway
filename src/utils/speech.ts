@@ -176,3 +176,164 @@ export function playChime(freq = 520, duration = 0.15): void {
     osc.stop(ctx.currentTime + duration);
   } catch {}
 }
+
+import { Station, StationServices } from '../types/station';
+
+/**
+ * توحيد النص العربي لإجراء مقارنات وبحث ذكي دقيق (إزالة التشكيل وتوحيد الحروف المتشابهة)
+ */
+export function normalizeArabicText(text: string): string {
+  if (!text) return '';
+  return text
+    .toLowerCase()
+    .replace(/[\u064B-\u065F\u0670]/g, '') // إزالة التشكيل
+    .replace(/[أإآٱ]/g, 'ا') // توحيد الألف
+    .replace(/[ىي]/g, 'ي') // توحيد الياء
+    .replace(/[ةه]/g, 'ه') // توحيد التاء المربوطة والهاء
+    .replace(/\u0640/g, '') // إزالة التطويل
+    .replace(/[-–_#()[\],.،/]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * تنقية الكلام الصوتي من الكلمات الاستفتاحية المعتادة في الإملاء
+ */
+export function cleanSpokenSearchText(phrase: string): string {
+  if (!phrase) return '';
+  let cleaned = phrase.trim();
+  cleaned = cleaned
+    .replace(/^(?:ابحث\s+عن|دور\s+على|عايز\s+محطة|عاوز\s+محطة|عايز\s+محطه|عاوز\s+محطه|عايز\s+مركز|عاوز\s+مركز|وديني\s+(?:لـ|الي|إلى|علي|على|محطة|محطه|فرع)?|فين\s+(?:محطة|محطه)?|محطة|محطه|مركز|فرع|منطقة|يا\s+معين|لو\s+سمحت|من\s+فضلك)\s+/gi, '')
+    .trim();
+  return cleaned || phrase.trim();
+}
+
+export interface VoiceCommandResult {
+  action: 'closest' | 'station' | 'service' | 'dictation';
+  searchQuery: string; // ما يجب كتابته فوراً في خانة البحث النصي
+  matchedStation?: Station;
+  serviceKey?: keyof StationServices;
+  feedbackText: string;
+}
+
+/**
+ * تحليل وتفسير الأمر الصوتي واستخلاص اسم المحطة بدقة فائقة
+ * بحيث يكتب في البحث اسم المحطة أو ما تم إملاؤه للصوت
+ */
+export function interpretVoiceCommand(
+  rawTranscript: string,
+  stations: Station[]
+): VoiceCommandResult {
+  const normRaw = normalizeArabicText(rawTranscript);
+  const cleanedText = cleanSpokenSearchText(rawTranscript);
+  const normCleaned = normalizeArabicText(cleanedText);
+
+  // 1. أمر أقرب محطة (عموماً أو بنشاط محدد)
+  if (normRaw.includes('اقرب') || normRaw.includes('قريب')) {
+    let serviceKey: keyof StationServices = 'cngRefuel';
+    let serviceLabel = 'تموين الغاز';
+
+    if (normRaw.includes('زيت') || normRaw.includes('زيوت') || normRaw.includes('bp') || normRaw.includes('بي بي')) {
+      serviceKey = 'bpOilCenter';
+      serviceLabel = 'زيوت BP';
+    } else if (normRaw.includes('فحص') || normRaw.includes('اسطوان') || normRaw.includes('اختبار')) {
+      serviceKey = 'cylinderTesting';
+      serviceLabel = 'فحص الأسطوانات';
+    } else if (normRaw.includes('صيان') || normRaw.includes('تحويل') || normRaw.includes('ورشه')) {
+      serviceKey = 'conversionMaintenance';
+      serviceLabel = 'التحويل والصيانة';
+    }
+
+    return {
+      action: 'closest',
+      searchQuery: rawTranscript.trim(),
+      serviceKey,
+      feedbackText: `جاري البحث عن أقرب محطة ${serviceLabel} لموقعك...`,
+    };
+  }
+
+  // 2. البحث عن اسم محطة محددة من شبكة المحطات
+  let bestMatch: Station | null = null;
+  let bestScore = 0;
+
+  for (const st of stations) {
+    const normName = normalizeArabicText(st.name);
+    const normPureName = normName.replace(/^كارجاس\s+/, '');
+    const normAddress = normalizeArabicText(st.address || '');
+    const normCity = normalizeArabicText(st.city || '');
+    const normGov = normalizeArabicText(st.governorate || '');
+
+    let score = 0;
+
+    // تطابق تام مع الاسم الصافي أو الكامل
+    if (normCleaned === normPureName || normCleaned === normName) {
+      score = 100;
+    } else if (normCleaned.length >= 3 && (normPureName.includes(normCleaned) || normName.includes(normCleaned))) {
+      score = 80 + normCleaned.length;
+    } else if (normPureName.length >= 3 && normCleaned.includes(normPureName)) {
+      score = 75 + normPureName.length;
+    } else {
+      // فحص الكلمات المفردة المهمة (مثل "ألماظة"، "شبرا"، "وادي حوف"، "مصدق"، إلخ)
+      const words = normCleaned.split(' ').filter((w) => w.length >= 3 && !['محطه', 'محطة', 'شارع', 'طريق', 'فرع', 'مركز', 'كارجاس'].includes(w));
+      for (const w of words) {
+        if (normPureName.includes(w)) {
+          score += 40;
+        } else if (normAddress.includes(w)) {
+          score += 25;
+        } else if (normCity.includes(w)) {
+          score += 20;
+        } else if (normGov.includes(w)) {
+          score += 15;
+        }
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = st;
+    }
+  }
+
+  // إذا وُجد تطابق جيد مع إحدى المحطات، نعتمد اسمها بالضبط لخانة البحث
+  if (bestMatch && bestScore >= 35) {
+    return {
+      action: 'station',
+      searchQuery: bestMatch.name, // يكتب في البحث اسم المحطة بالضبط!
+      matchedStation: bestMatch,
+      feedbackText: `تم العثور على ${bestMatch.name} يا باشا، وجاري توجيهك إليها`,
+    };
+  }
+
+  // 3. فلتر النشاط إذا لم تذكر محطة محددة
+  if (normRaw.includes('زيوت') || normRaw.includes('بي بي') || normRaw.includes('bp')) {
+    return {
+      action: 'service',
+      searchQuery: rawTranscript.trim(),
+      serviceKey: 'bpOilCenter',
+      feedbackText: 'تم تحديد مراكز زيوت BP كاسترول المعتمدة',
+    };
+  }
+  if (normRaw.includes('فحص') || normRaw.includes('اسطوان')) {
+    return {
+      action: 'service',
+      searchQuery: rawTranscript.trim(),
+      serviceKey: 'cylinderTesting',
+      feedbackText: 'تم تحديد مراكز فحص واختبار أسطوانات الغاز',
+    };
+  }
+  if (normRaw.includes('تحويل') || normRaw.includes('صيان')) {
+    return {
+      action: 'service',
+      searchQuery: rawTranscript.trim(),
+      serviceKey: 'conversionMaintenance',
+      feedbackText: 'تم تحديد مراكز التحويل والصيانة المعتمدة',
+    };
+  }
+
+  // 4. إملاء عام بالصوت: يكتب في البحث ما تم إملاؤه للصوت
+  return {
+    action: 'dictation',
+    searchQuery: cleanedText || rawTranscript.trim(),
+    feedbackText: `تم البحث عن: ${cleanedText || rawTranscript.trim()}`,
+  };
+}

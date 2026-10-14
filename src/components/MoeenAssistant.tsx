@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { speakArabic, stopSpeaking } from '../utils/speech';
+import {
+  speakArabic,
+  stopSpeaking,
+  startVoiceRecognition,
+  isSpeechRecognitionSupported,
+  interpretVoiceCommand,
+} from '../utils/speech';
 import {
   Bot,
   Volume2,
@@ -14,6 +20,8 @@ import {
   Send,
   HelpCircle,
   MessageSquare,
+  Mic,
+  MicOff,
 } from 'lucide-react';
 
 export const MoeenAssistant: React.FC = () => {
@@ -26,11 +34,15 @@ export const MoeenAssistant: React.FC = () => {
     setSelectedService,
     userLocation,
     requestUserLocation,
+    setSearchQuery,
+    stations,
   } = useApp();
 
   const [message, setMessage] = useState<string>(settings.moeenGreetingText);
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
+  const [isListening, setIsListening] = useState<boolean>(false);
   const [customInput, setCustomInput] = useState<string>('');
+  const [speechRecognizer, setSpeechRecognizer] = useState<{ stop: () => void } | null>(null);
 
   // تحديث الرسالة إذا تغيرت من الإعدادات
   useEffect(() => {
@@ -63,6 +75,7 @@ export const MoeenAssistant: React.FC = () => {
       const closest = findClosestStation('cngRefuel');
       if (closest) {
         setActiveMapStation(closest);
+        setSearchQuery(closest.name); // كتابة اسم المحطة في البحث
         reply = `لقيتلك أقرب محطة تموين غاز طبيعي: "${closest.name}" في ${closest.governorate}، تبعد عنك حوالي ${closest.distance?.toFixed(1) || ''} كم. اضغط على زر "ابدأ الملاحة" وهتفتح خرائط جوجل مباشرة بدون أي تكلفة!`;
       } else {
         reply = 'فعّل إذن الموقع الجغرافي (GPS) عشان أقدر أحسبلك أقرب محطة غاز لمكانك الحالي بالضبط.';
@@ -74,6 +87,7 @@ export const MoeenAssistant: React.FC = () => {
       const closest = findClosestStation('bpOilCenter');
       if (closest) {
         setActiveMapStation(closest);
+        setSearchQuery(closest.name); // كتابة اسم المحطة في البحث
         reply = `تمام يا فندم! فلترتلك مراكز زيوت BP كاسترول المعتمدة، وأقرب مركز ليك هو "${closest.name}". الزيوت هناك أصلية 100% مع غيار الفلاتر وسوائل التبريد.`;
       } else {
         reply = 'تم تفعيل فلتر مراكز زيوت BP، تقدر تشوف كافة المراكز المتاحة على الخريطة وقائمتها.';
@@ -85,6 +99,7 @@ export const MoeenAssistant: React.FC = () => {
       const closest = findClosestStation('cylinderTesting');
       if (closest) {
         setActiveMapStation(closest);
+        setSearchQuery(closest.name); // كتابة اسم المحطة في البحث
         reply = `مراكز الفحص الهيدروستاتيكي المعتمدة لأسطوانات الغاز متوفرة، وأقرب مركز هو "${closest.name}". الفحص بيتم بأعلى معايير السلامة والأمان لكارجاس وغازتك.`;
       } else {
         reply = 'تم تصفية مراكز فحص الأسطوانات الدورية المعتمدة على الخريطة.';
@@ -101,35 +116,114 @@ export const MoeenAssistant: React.FC = () => {
     speakEgyptian(reply);
   };
 
+  const processMoeenVoiceInput = async (phrase: string) => {
+    if (!phrase || !phrase.trim()) return;
+
+    const result = interpretVoiceCommand(phrase, stations);
+
+    if (result.action === 'closest') {
+      if (result.serviceKey) setSelectedService(result.serviceKey);
+      let loc = userLocation;
+      if (!loc) loc = await requestUserLocation();
+      const closest = findClosestStation(result.serviceKey);
+      if (closest) {
+        setActiveMapStation(closest);
+        setSearchQuery(closest.name);
+        const reply = `لقيتلك أقرب محطة يا باشا: "${closest.name}"، وكتبتهالك في شريط البحث وتقدر تبدأ الملاحة فوراً!`;
+        setMessage(reply);
+        speakEgyptian(reply);
+      } else {
+        setSearchQuery(result.searchQuery);
+        const reply = 'فعّل الموقع عشان أحددلك أقرب محطة ليك بدقة.';
+        setMessage(reply);
+        speakEgyptian(reply);
+      }
+      return;
+    }
+
+    if (result.action === 'station' && result.matchedStation) {
+      setSearchQuery(result.matchedStation.name);
+      setActiveMapStation(result.matchedStation);
+      const reply = `تمام يا باشا، لقيتلك "${result.matchedStation.name}" وكتبتها في البحث، وفتحتلك موقعها على الخريطة!`;
+      setMessage(reply);
+      speakEgyptian(reply);
+      return;
+    }
+
+    if (result.action === 'service') {
+      if (result.serviceKey) setSelectedService(result.serviceKey);
+      setSearchQuery(result.searchQuery);
+      const reply = result.feedbackText;
+      setMessage(reply);
+      speakEgyptian(reply);
+      return;
+    }
+
+    // إملاء عام
+    setSearchQuery(result.searchQuery);
+    const reply = `دورتلك في المنظومة على "${result.searchQuery}" وكتبتهالك في البحث!`;
+    setMessage(reply);
+    speakEgyptian(reply);
+  };
+
+  const handleToggleMoeenVoice = () => {
+    if (isListening) {
+      speechRecognizer?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    if (!isSpeechRecognitionSupported()) {
+      setMessage('التعرف الصوتي غير مدعوم في هذا المتصفح');
+      speakEgyptian('التعرف الصوتي غير مدعوم في هذا المتصفح');
+      return;
+    }
+
+    setIsListening(true);
+    setCustomInput('جاري الاستماع... تحدث الآن');
+
+    const rec = startVoiceRecognition(
+      (transcript, isFinal) => {
+        setCustomInput(transcript);
+        setSearchQuery(transcript);
+
+        if (isFinal) {
+          setIsListening(false);
+          processMoeenVoiceInput(transcript);
+        }
+      },
+      (err) => {
+        setIsListening(false);
+        setMessage(err);
+      },
+      () => {
+        setIsListening(false);
+      }
+    );
+
+    setSpeechRecognizer(rec);
+  };
+
   const handleCustomSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!customInput.trim()) return;
 
-    const q = customInput.toLowerCase();
+    const inputVal = customInput.trim();
+    const q = inputVal.toLowerCase();
     let reply = '';
 
     if (q.includes('مين انت') || q.includes('شخصيتك') || q.includes('اسمك')) {
       reply = settings.showCompanyInfo
         ? `أنا "مُعين"، مساعدك الذكي من ${settings.companyName}. بجمع بين جدعنة ابن البلد وهندسة النظم القوية عشان أخدمك في كل مشاويرك ومحطاتك!`
         : 'أنا "مُعين"، مساعدك الذكي هنا عشان أدلك على أقرب محطة وقود وخدمات وأساعدك تبدأ الملاحة الصوتية فوراً!';
-    } else if (q.includes('اقرب') || q.includes('أقرب')) {
-      handleQuickQuestion('closest_cng');
+      setMessage(reply);
+      speakEgyptian(reply);
       setCustomInput('');
       return;
-    } else if (q.includes('زيت') || q.includes('bp') || q.includes('بي بي')) {
-      handleQuickQuestion('bp_oils');
-      setCustomInput('');
-      return;
-    } else if (q.includes('اسطوان') || q.includes('فحص')) {
-      handleQuickQuestion('cylinder_test');
-      setCustomInput('');
-      return;
-    } else {
-      reply = `أنا فهمت سؤالك عن "${customInput}"، جرب تختار الفلتر المناسب من شريط الأنشطة أو استخدم زر "أقرب محطة لي" وهيتم التوجيه فوراً!`;
     }
 
-    setMessage(reply);
-    speakEgyptian(reply);
+    // معالجة الأمر والبحث عن المحطة وتحديث البحث
+    processMoeenVoiceInput(inputVal);
     setCustomInput('');
   };
 
@@ -268,18 +362,35 @@ export const MoeenAssistant: React.FC = () => {
             </div>
           </div>
 
-          {/* حقل إدخال سؤال للمساعد */}
+          {/* حقل إدخال سؤال للمساعد مع زر مايكروفون للتحدث الصوتي المباشر */}
           <form onSubmit={handleCustomSubmit} className="p-3 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700 flex items-center gap-2">
             <input
               type="text"
               value={customInput}
               onChange={(e) => setCustomInput(e.target.value)}
-              placeholder="اسأل مُعين أي سؤال عن المحطات..."
-              className="flex-1 py-2 px-3 text-xs bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-white rounded-xl border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder={isListening ? '🎙️ تحدث الآن وسيكتب صوتك...' : 'اسأل مُعين أو أملِ اسم محطة...'}
+              className={`flex-1 py-2 px-3 text-xs bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-white rounded-xl border transition ${
+                isListening
+                  ? 'border-rose-500 ring-2 ring-rose-400/50 bg-rose-50/30 dark:bg-rose-950/30'
+                  : 'border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500'
+              }`}
             />
+            {/* زر مايكروفون التحدث الصوتي مع مُعين */}
+            <button
+              type="button"
+              onClick={handleToggleMoeenVoice}
+              className={`p-2 rounded-xl transition cursor-pointer ${
+                isListening
+                  ? 'bg-rose-600 text-white animate-pulse shadow'
+                  : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800'
+              }`}
+              title={isListening ? 'إيقاف الاستماع' : 'تحدث صوتياً مع مُعين'}
+            >
+              {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            </button>
             <button
               type="submit"
-              className="p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow transition"
+              className="p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow transition cursor-pointer"
               title="إرسال"
             >
               <Send className="w-4 h-4 rotate-180" />
